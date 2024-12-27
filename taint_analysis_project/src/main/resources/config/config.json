@@ -11,6 +11,10 @@
               "parameterTypes": ["java.io.InputStream", "System.in"],
               "parameters": ["System.in"]
             }
+          ],
+          "methods": [
+            "nextLine()", "next()", "nextInt()", "nextDouble()", "nextBoolean()",
+            "nextByte()", "nextShort()", "nextLong()", "nextFloat()"
           ]
         },
         {
@@ -20,6 +24,9 @@
               "parameterTypes": ["java.io.InputStreamReader", "java.io.InputStream", "System.in"],
               "parameters": ["System.in"]
             }
+          ],
+          "methods": [
+            "readLine()", "read()", "skip()"
           ]
         },
         {
@@ -29,11 +36,17 @@
               "parameterTypes": ["java.io.InputStream", "System.in"],
               "parameters": ["System.in"]
             }
+          ],
+          "methods": [
+            "read()", "ready()"
           ]
         },
         {
           "className": "java.io.Console",
-          "constructors": []
+          "constructors": [],
+          "methods": [
+            "readLine()", "readPassword()"
+          ]
         }
       ]
     },
@@ -43,7 +56,10 @@
       "classes": [
         {
           "className": "java.io.InputStream",
-          "constructors": []
+          "constructors": [],
+          "methods": [
+            "read()", "available()"
+          ]
         },
         {
           "className": "java.io.BufferedReader",
@@ -52,6 +68,9 @@
               "parameterTypes": ["java.io.InputStreamReader", "java.util.stream"],
               "parameters": ["Stream input"]
             }
+          ],
+          "methods": [
+            "readLine()", "read()", "skip()"
           ]
         },
         {
@@ -61,6 +80,9 @@
               "parameterTypes": ["java.io.File"],
               "parameters": ["input.txt"]
             }
+          ],
+          "methods": [
+            "read()", "getChannel()"
           ]
         },
         {
@@ -70,6 +92,9 @@
               "parameterTypes": ["java.io.InputStream", "java.util.stream"],
               "parameters": ["Stream input"]
             }
+          ],
+          "methods": [
+            "readObject()", "readInt()", "readDouble()", "readBoolean()"
           ]
         }
       ]
@@ -80,7 +105,8 @@
       "classes": [
         {
           "className": "java.lang.System",
-          "constructors": []
+          "constructors": [],
+          "methods": []
         }
       ]
     },
@@ -90,11 +116,9 @@
       "classes": [
         {
           "className": "java.net.HttpURLConnection",
-          "constructors": [
-            {
-              "parameterTypes": ["java.net.URL", "API URL"],
-              "parameters": ["API URL"]
-            }
+          "constructors": [],
+          "methods": [
+            "getInputStream()", "getHeaderField()"
           ]
         },
         {
@@ -104,6 +128,9 @@
               "parameterTypes": ["java.lang.String"],
               "parameters": ["API URL"]
             }
+          ],
+          "methods": [
+            "openStream()", "getContent()"
           ]
         },
         {
@@ -113,6 +140,9 @@
               "parameterTypes": ["java.io.InputStream", "HttpURLConnection.getInputStream()"],
               "parameters": ["HttpURLConnection.getInputStream()"]
             }
+          ],
+          "methods": [
+            "read()", "ready()"
           ]
         },
         {
@@ -122,6 +152,9 @@
               "parameterTypes": ["java.io.InputStreamReader", "java.io.InputStream", "HttpURLConnection.getInputStream()"],
               "parameters": ["HttpURLConnection.getInputStream()"]
             }
+          ],
+          "methods": [
+            "readLine()", "read()", "skip()"
           ]
         }
       ]
@@ -132,19 +165,29 @@
       "classes": [
         {
           "className": "java.sql.Connection",
-          "constructors": []
+          "constructors": [],
+          "methods": []
         },
         {
           "className": "java.sql.Statement",
-          "constructors": []
+          "constructors": [],
+          "methods": [
+            "executeQuery()", "executeUpdate()", "execute()"
+          ]
         },
         {
           "className": "java.sql.ResultSet",
-          "constructors": []
+          "constructors": [],
+          "methods": [
+            "getString()", "getInt()", "getDouble()", "getBoolean()"
+          ]
         },
         {
           "className": "java.sql.PreparedStatement",
-          "constructors": []
+          "constructors": [],
+          "methods": [
+            "setString()", "setInt()", "setDouble()", "executeQuery()", "executeUpdate()"
+          ]
         }
       ]
     },
@@ -154,7 +197,10 @@
       "classes": [
         {
           "className": "java.lang.System",
-          "constructors": []
+          "constructors": [],
+          "methods": [
+            "getProperty()", "getenv()"
+          ]
         }
       ]
     },
@@ -169,6 +215,9 @@
               "parameterTypes": ["java.lang.String", "int"],
               "parameters": ["Remote host", "Port"]
             }
+          ],
+          "methods": [
+            "getInputStream()"
           ]
         },
         {
@@ -177,11 +226,9 @@
         },
         {
           "className": "java.net.HttpURLConnection",
-          "constructors": [
-            {
-              "parameterTypes": ["java.net.URL", "java.lang.String"],
-              "parameters": ["Remote API URL"]
-            }
+          "constructors": [],
+          "methods": [
+            "getInputStream()", "getHeaderField()"
           ]
         },
         {
@@ -191,6 +238,9 @@
               "parameterTypes": ["java.io.InputStream", "java.net.Socket"],
               "parameters": ["Socket input"]
             }
+          ],
+          "methods": [
+            "read()", "ready()"
           ]
         }
       ]
@@ -201,7 +251,10 @@
       "classes": [
         {
           "className": "javax.mail.Message",
-          "constructors": []
+          "constructors": [],
+          "methods": [
+            "getSubject()", "getContent()", "getFrom()", "getRecipients()"
+          ]
         },
         {
           "className": "javax.mail.Session",
@@ -209,7 +262,10 @@
         },
         {
           "className": "javax.mail.internet.MimeMessage",
-          "constructors": []
+          "constructors": [],
+          "methods": [
+            "getSubject()", "getContent()", "getFrom()", "getRecipients()"
+          ]
         }
       ]
     },
@@ -219,7 +275,8 @@
       "classes": [
         {
           "className": "java.util.logging.Logger",
-          "constructors": []
+          "constructors": [],
+          "methods": []
         },
         {
           "className": "java.util.logging.FileHandler",
@@ -228,7 +285,8 @@
               "parameterTypes": ["java.io.File"],
               "parameters": ["log.txt"]
             }
-          ]
+          ],
+          "methods": []
         },
         {
           "className": "java.io.FileReader",
@@ -237,6 +295,9 @@
               "parameterTypes": ["java.io.File"],
               "parameters": ["config.properties"]
             }
+          ],
+          "methods": [
+            "read()"
           ]
         },
         {
@@ -246,11 +307,17 @@
               "parameterTypes": ["java.io.FileReader", "java.io.File"],
               "parameters": ["config.properties"]
             }
+          ],
+          "methods": [
+            "readLine()", "read()", "skip()"
           ]
         },
         {
           "className": "java.util.Properties",
-          "constructors": []
+          "constructors": [],
+          "methods": [
+            "load()", "getProperty()"
+          ]
         }
       ]
     }

@@ -5,7 +5,6 @@ import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
@@ -87,30 +86,39 @@ public class Analyzer {
         public void visit(MethodCallExpr methodCall, Void arg) {
             methodCall.getScope().ifPresent(scope -> {
                 try {
-                    System.out.println("Current method to analyze: " + methodCall.getName());
+
                     ResolvedType resolvedType = scope.calculateResolvedType();
+
                     if (resolvedType.isReferenceType()) {
 
                         // Integra VariableResolverVisitor per trovare la variabile
                         variableResolver.visit(cu, null);
 
-                        // Trova la dichiarazione della variabile
-                        String variableName = scope.toString();
-
-                        // TODO: e se fosse un metodo statico, quindi anzichè istanza.metodo trovasse Classe.Metodo? Sistemare questo caso.
-                        ResolvedType variableType = variableResolver.getResolvedVariableType(variableName);
-                        if (variableType != null) {
-                            System.out.println("Tipo della variabile '" + variableName + "': " + variableType.describe());
-                        }
+                        String currentMethod = methodCall.getNameAsString() + "()";
+                        String className = scope.calculateResolvedType().describe();
+                        List<String> constructorParameterTypes = new ArrayList<>();
+                        boolean staticMethod = false;
 
                         ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
-                        if (resolvedMethod.isStatic()) {
-                            System.out.println("Il metodo è statico.");
 
+                        if (!resolvedMethod.isStatic()) {
+                            // Trova la dichiarazione della variabile
+                            String variableName = scope.toString();
+
+                            ResolvedType variableType = variableResolver.getResolvedVariableType(variableName);
+                            if (variableType != null) {
+                                System.out.println("Tipo della variabile '" + variableName + "': " + variableType.describe());
+                            }
+
+                            // Analizza il costruttore e i parametri
+                            analyzeConstructor(scope, constructorParameterTypes);
+                        }
+                        else {
+                            System.out.println("Il metodo è statico.");
+                            staticMethod = true;
                         }
 
-                        // Analizza il costruttore e i parametri
-                        analyzeConstructor(scope);
+                        compareWithConfigurationData(constructorParameterTypes, className, currentMethod, staticMethod);
                     }
                     System.out.println("-------------------------------------------");
                 } catch (Exception e) {
@@ -121,22 +129,15 @@ public class Analyzer {
             super.visit(methodCall, arg);
         }
 
-        private void analyzeConstructor(Expression scope) {
+        private void analyzeConstructor(Expression scope, List<String> constructorParameterTypes) {
             if (scope.isNameExpr()) {
 
-                System.out.println("Scope: " + scope + " is a NameExpr");
-                System.out.println("Scope class: " + scope.calculateResolvedType().describe());
                 NameExpr nameExpr = scope.asNameExpr();
 
                 try {
-                    // Risolvi il simbolo della variabile con il Symbol Solver
-                    ResolvedValueDeclaration resolvedVariable = nameExpr.resolve();
-
-                    System.out.println("Nome della variabile risolta: " + resolvedVariable.getName());
-
                     // Trova la dichiarazione originale nello scope corretto
                     Optional<VariableDeclarator> variableNode = findVariableNodeInScope(nameExpr);
-                    variableNode.ifPresent(this::analyzeVariableInitializer);
+                    variableNode.ifPresent(variable -> analyzeVariableInitializer(variable, constructorParameterTypes));
                 } catch (UnsolvedSymbolException e) {
                     System.err.println("Impossibile risolvere il simbolo per: " + nameExpr.getNameAsString());
                     System.out.println("Error: " + e.getMessage());
@@ -200,26 +201,13 @@ public class Analyzer {
             return Optional.empty();
         }
 
-        // Metodo per analizzare l'inizializzatore della variabile
-        private void analyzeVariableInitializer(VariableDeclarator variable) {
-
-            // TODO: E se non avesse il costruttore ma richiama comunque un metodo?
-            //        Es: URL url = new URL("http://api.example.com/data");
-            //             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            //             connection.setRequestMethod("GET");
-            //    Qui connection non è istanziato tramite un costruttore esplicito (utilizzando new),
-            //    quindi coprire anche questo caso per poterlo confrontare con le sorgenti del file di
-            //    configurazione.
-
+        private void analyzeVariableInitializer(VariableDeclarator variable, List<String> constructorParameterTypes) {
             variable.getInitializer().ifPresent(initializer -> {
                 if (initializer.isObjectCreationExpr()) {
                     ObjectCreationExpr creationExpr = initializer.asObjectCreationExpr();
                     System.out.println("Oggetto creato: " + creationExpr);
-                    List<String> parameterTypes = new ArrayList<>();
-                    analyzeConstructorDetails(creationExpr, parameterTypes);
-                    Collections.reverse(parameterTypes);
-                    System.out.println("Lista dei tipi dei parametri del costruttore:" + parameterTypes);
-                    compareConstructorParameters(parameterTypes, creationExpr.getType().resolve().describe());
+                    analyzeConstructorDetails(creationExpr, constructorParameterTypes);
+                    Collections.reverse(constructorParameterTypes);
                 }
             });
         }
@@ -232,19 +220,21 @@ public class Analyzer {
                     .findFirst();
         }
 
-        private void compareConstructorParameters(List<String> parameterTypes, String currentType) {
+        private void compareWithConfigurationData(List<String> parameterTypes, String className,
+                                                  String currentMethod, boolean staticMethod) {
 
             // Continua il confronto con la configurazione
-            var constructorDetails = configLoader.getSourceDetailsForResolvedType(currentType,parameterTypes);
+            var constructorDetails = configLoader.getSourceDetailsForResolvedType(className, currentMethod, parameterTypes, staticMethod);
 
             if (constructorDetails != null && !constructorDetails.isTrusted()) {
                 System.out.println("Warning: Object created with untrusted constructor:");
-                System.out.println("  Class: " + currentType);
+                System.out.println("  Class: " + className);
                 System.out.println("  Parameters: " + parameterTypes);
                 System.out.println("  Source: " + constructorDetails.getName());
                 System.out.println("  Trusted: " + constructorDetails.isTrusted());
             }
         }
+
         private void analyzeConstructorDetails(ObjectCreationExpr creationExpr, List<String> parameterTypes) {
 
             String currentType = creationExpr.getType().resolve().describe();
@@ -300,9 +290,6 @@ public class Analyzer {
                             }
                     );
                 } else if (arg instanceof FieldAccessExpr) {
-                    /* TODO: qui si dà per assodato che la struttura sia Classe.campo, ma se fosse istanza.campo?
-                        Coprire anche questo caso, estrapolandone la classe.
-                    *  */
                     FieldAccessExpr fieldAccessExpr = arg.asFieldAccessExpr();
                     NameExpr className = fieldAccessExpr.getScope().asNameExpr();
                     String field = fieldAccessExpr.getNameAsString();

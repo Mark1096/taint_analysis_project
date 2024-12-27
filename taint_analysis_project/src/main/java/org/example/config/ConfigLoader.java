@@ -27,16 +27,21 @@ public class ConfigLoader {
         return true;
     }
 
-    public SourceDetails getSourceDetailsForResolvedType(String className, List<String> parameterContext) {
-
+    public SourceDetails getSourceDetailsForResolvedType(String className, String currentMethod,
+                                                         List<String> parameterContext, boolean staticMethod) {
         for (Source source : sources.values()) {
             for (ConfigClass configClass : source.getClasses()) {
                 if (configClass.getClassName().equals(className)) {
-                    System.out.println("Config class: " + configClass.getClassName());
-                    System.out.println("Class Name: " + className);
-                    for (ConstructorInfo constructor : configClass.getConstructors()) {
-                        if (matchesConstructor(constructor, parameterContext)) {
+                    if(configClass.getMethods().contains(currentMethod)) {
+                        if(staticMethod || configClass.getConstructors().isEmpty()) {
                             return new SourceDetails(source.getName(), source.isTrusted());
+                        }
+                        else {
+                            for (ConstructorInfo constructor : configClass.getConstructors()) {
+                                if (matchesConstructor(constructor, parameterContext)) {
+                                    return new SourceDetails(source.getName(), source.isTrusted());
+                                }
+                            }
                         }
                     }
                 }
@@ -47,17 +52,10 @@ public class ConfigLoader {
 
     private boolean matchesConstructor(ConstructorInfo constructor, List<String> constructorArgs) {
 
-        System.out.println("constructor config: " + constructor.getParameterTypes());
-        System.out.println("constructor args: " + constructorArgs);
-        System.out.println("constructors config number: " + constructor.getParameterTypes().size());
-        System.out.println("constructor args number: " + constructorArgs.size());
-
         if (constructor.getParameterTypes().size() != constructorArgs.size()) {
             return false;
         }
-
-        System.out.println("Supero il controllo sulla dimensione!");
-
+        
         return constructor.getParameterTypes().equals(constructorArgs);
     }
 

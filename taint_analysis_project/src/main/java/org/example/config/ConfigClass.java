@@ -9,6 +9,7 @@ import java.util.List;
 @Setter
 public class ConfigClass {
     private String className;
+    private List<String> methods;
     private List<ConstructorInfo> constructors;
 }
 
