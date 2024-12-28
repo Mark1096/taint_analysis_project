@@ -84,6 +84,16 @@ public class Analyzer {
 
         @Override
         public void visit(MethodCallExpr methodCall, Void arg) {
+
+            System.out.println("Metodo da analizzare: " + methodCall.getName());
+
+            // Verifica se la chiamata a metodo è un argomento di un'altra espressione
+            if (isNestedMethodCall(methodCall)) {
+                System.out.println("Il metodo: " + methodCall.getName() + " è un argomento di un construttore o di un altro metodo!");
+                System.out.println("-------------------------------------------");
+                return; // Ignora questo metodo, è un argomento di un'altra chiamata
+            }
+
             methodCall.getScope().ifPresent(scope -> {
                 try {
 
@@ -127,6 +137,12 @@ public class Analyzer {
             });
 
             super.visit(methodCall, arg);
+        }
+
+        private boolean isNestedMethodCall(MethodCallExpr methodCall) {
+            return methodCall.getParentNode()
+                    .map(parent -> parent instanceof MethodCallExpr || parent instanceof ObjectCreationExpr)
+                    .orElse(false);
         }
 
         private void analyzeConstructor(Expression scope, List<String> constructorParameterTypes) {
