@@ -1,5 +1,6 @@
 package org.example.service;
 
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
@@ -13,11 +14,13 @@ import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
+
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import com.github.javaparser.ParserConfiguration;
 import org.example.config.ConfigLoader;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.util.*;
 
 public class Analyzer {
@@ -25,13 +28,15 @@ public class Analyzer {
     private static ConfigLoader configLoader;
     private final String[] commandLineArgs;
     private static CompilationUnit cu;
+    private static Map<String, String> sanitizationMapping;
 
-    public Analyzer(ConfigLoader loader, String[] args) {
+    public Analyzer(ConfigLoader loader, String[] args, String configFilePath) {
         configLoader = loader;
         this.commandLineArgs = args;
+        sanitizationMapping = InputSanitizerMapping.creationMapping(configFilePath);
     }
 
-    public void analyze(String sourceFilePath) throws FileNotFoundException {
+    public void analyze(String sourceFilePath) throws IOException {
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(Paths.get("src/main/java")));
@@ -51,6 +56,12 @@ public class Analyzer {
         // Usa MethodCallVisitor con il resolver integrato
         MethodCallVisitor methodCallVisitor = new MethodCallVisitor();
         methodCallVisitor.visit(cu, null);
+
+        // Scrivi il codice modificato in un nuovo file
+        String outputPath = "src/main/java/org/example/destination/ClassToAnalyze2.java";
+        Files.write(Paths.get(outputPath), cu.toString().getBytes());
+
+        System.out.println("File aggiornato scritto in: " + outputPath);
 
         analyzeCommandLineArgs();
     }
@@ -128,7 +139,7 @@ public class Analyzer {
                             staticMethod = true;
                         }
 
-                        compareWithConfigurationData(constructorParameterTypes, className, currentMethod, staticMethod);
+                        compareWithConfigurationData(constructorParameterTypes, className, methodCall, staticMethod);
                     }
                     System.out.println("-------------------------------------------");
                 } catch (Exception e) {
@@ -236,9 +247,25 @@ public class Analyzer {
                     .findFirst();
         }
 
-        private void compareWithConfigurationData(List<String> parameterTypes, String className,
-                                                  String currentMethod, boolean staticMethod) {
+        private void insertSanitizeMethod(MethodCallExpr methodCall, String source) {
 
+            if (sanitizationMapping.containsKey(source)) {
+                String value = sanitizationMapping.get(source);
+                String sanitizedCall = value.concat("(" + methodCall.toString() + ")");
+
+                // Sostituisce l'espressione corrente con quella nuova
+                Expression sanitizedExpression = StaticJavaParser.parseExpression(sanitizedCall);
+                methodCall.replace(sanitizedExpression);
+
+            } else {
+                System.out.println("Chiave '" + source + "' non trovata nella mappa.");
+            }
+        }
+
+        private void compareWithConfigurationData(List<String> parameterTypes, String className,
+                                                  MethodCallExpr methodCall, boolean staticMethod) {
+
+            String currentMethod = methodCall.getNameAsString().concat("()");
             // Continua il confronto con la configurazione
             var constructorDetails = configLoader.getSourceDetailsForResolvedType(className, currentMethod, parameterTypes, staticMethod);
 
@@ -248,6 +275,7 @@ public class Analyzer {
                 System.out.println("  Parameters: " + parameterTypes);
                 System.out.println("  Source: " + constructorDetails.getName());
                 System.out.println("  Trusted: " + constructorDetails.isTrusted());
+                insertSanitizeMethod(methodCall, constructorDetails.getName());
             }
         }
 
