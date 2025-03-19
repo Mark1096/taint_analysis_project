@@ -1,9 +1,12 @@
 package org.example.config;
 
 import com.google.gson.Gson;
+import org.example.service.ConstructorAnalyzer;
+
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Stream;
 
 public class ConfigLoader {
     private final Map<String, Source> sources = new HashMap<>();
@@ -19,48 +22,34 @@ public class ConfigLoader {
     }
 
     public boolean isSourceTrusted(String sourceName) {
-        for (Source source : sources.values()) {
-            if (source.getName().equals(sourceName)) {
-                return source.isTrusted();
-            }
-        }
-        return true;
+        return sources.values().stream()
+                .filter(source -> source.getName().equals(sourceName))
+                .map(Source::isTrusted)
+                .findFirst()
+                .orElse(true);
     }
 
-    public SourceDetails getSourceDetailsForResolvedType(String className, String currentMethod,
-                                                         List<String> parameterContext, boolean staticMethod) {
-        for (Source source : sources.values()) {
-            for (ConfigClass configClass : source.getClasses()) {
-                if (configClass.getClassName().equals(className)) {
-                    if(configClass.getMethods().contains(currentMethod)) {
-                        if(staticMethod || configClass.getConstructors().isEmpty()) {
-                            return new SourceDetails(source.getName(), source.isTrusted());
-                        }
-                        else {
-                            for (ConstructorInfo constructor : configClass.getConstructors()) {
-                                if (matchesConstructor(constructor, parameterContext)) {
-                                    return new SourceDetails(source.getName(), source.isTrusted());
-                                }
+    public Source getSourceDetailsForResolvedType(String className, String currentMethod,
+                                                     List<String> parameterContext, boolean staticMethod) {
+        return sources.values().stream()
+                .flatMap(source -> source.getClasses().stream()
+                        .filter(configClass -> configClass.getClassName().equals(className))
+                        .filter(configClass -> configClass.getMethods().contains(currentMethod))
+                        .flatMap(configClass -> {
+                            if (staticMethod || configClass.getConstructors().isEmpty()) {
+                                return Stream.empty();  // Probabilmente si potrebbe restituire direttamente null, piuttosto che un oggetto. Da valutare!
                             }
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private boolean matchesConstructor(ConstructorInfo constructor, List<String> constructorArgs) {
-
-        if (constructor.getParameterTypes().size() != constructorArgs.size()) {
-            return false;
-        }
-        
-        return constructor.getParameterTypes().equals(constructorArgs);
+                            return configClass.getConstructors().stream()
+                                .anyMatch(constructor -> ConstructorAnalyzer.matchesConstructor(constructor, parameterContext))
+                                ? Stream.of(source)
+                                : Stream.empty();
+                        }))
+                .findFirst()
+                .orElse(null);
     }
 
     private static class Config {
-        List<Source> sources;
+        public List<Source> sources;
     }
-}
 
+}
