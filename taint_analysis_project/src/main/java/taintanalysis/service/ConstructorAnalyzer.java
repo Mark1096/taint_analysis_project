@@ -1,17 +1,25 @@
-package org.example.service;
+package taintanalysis.service;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.resolution.types.ResolvedType;
-import org.example.config.ConstructorInfo;
+import taintanalysis.config.ConstructorInfo;
 
 import java.util.List;
 import java.util.Optional;
 
 public class ConstructorAnalyzer {
 
-    private static Optional<String> resolveVariableType(NameExpr nameExpr, CompilationUnit cu) {
+    private final static ConstructorAnalyzer obj = new ConstructorAnalyzer();
+
+    private ConstructorAnalyzer() {}
+
+    public static ConstructorAnalyzer getInstance() {
+        return obj;
+    }
+
+    private Optional<String> resolveVariableType(NameExpr nameExpr, CompilationUnit cu) {
         // Trova la dichiarazione della variabile nel contesto della CompilationUnit
         return cu.findAll(VariableDeclarator.class).stream()
                 .filter(declarator -> declarator.getNameAsString().equals(nameExpr.getNameAsString()))
@@ -19,7 +27,7 @@ public class ConstructorAnalyzer {
                 .findFirst();
     }
 
-    private static void argAsNameExpr(NameExpr arg, CompilationUnit cu, List<String> parameterTypes) {
+    private void argAsNameExpr(NameExpr arg, CompilationUnit cu, List<String> parameterTypes) {
         System.out.println("Argomento è una variabile: " + arg.getName());
 
         Optional<String> result = resolveVariableType(arg, cu);
@@ -31,19 +39,19 @@ public class ConstructorAnalyzer {
         parameterTypes.add(arg.calculateResolvedType().describe());
     }
 
-    private static void argAsLiteralExpr(LiteralExpr arg, List<String> parameterTypes) {
+    private void argAsLiteralExpr(LiteralExpr arg, List<String> parameterTypes) {
         System.out.println("Argomento è un valore letterale: " + arg);
         parameterTypes.add(arg.calculateResolvedType().describe());
     }
 
-    private static void argAsObjectCreationExpr(ObjectCreationExpr arg, List<String> parameterTypes,
+    private void argAsObjectCreationExpr(ObjectCreationExpr arg, List<String> parameterTypes,
                                                 CompilationUnit cu, VariableResolverVisitor variableResolver) {
         System.out.println("Trovato un altro ObjectCreationExpr, di tipo: " + arg.getType());
         analyzeConstructorDetails(arg, parameterTypes, cu, variableResolver);
         parameterTypes.add(arg.getType().resolve().describe());
     }
 
-    private static void argAsMethodCallExpr(MethodCallExpr arg, CompilationUnit cu, List<String> parameterTypes) {
+    private void argAsMethodCallExpr(MethodCallExpr arg, CompilationUnit cu, List<String> parameterTypes) {
         System.out.println("Method: " + arg);
         System.out.println("Method returned type: " + arg.resolve().getReturnType().describe());
         arg.getScope().ifPresentOrElse(
@@ -70,8 +78,7 @@ public class ConstructorAnalyzer {
                 () -> System.out.println("Method call has no scope") // Caso in cui non c'è un scope
         );
     }
-
-    private static void argAsFieldAccessExpr(FieldAccessExpr arg, List<String> parameterTypes) {
+    private void argAsFieldAccessExpr(FieldAccessExpr arg, List<String> parameterTypes) {
         FieldAccessExpr fieldAccessExpr = arg.asFieldAccessExpr();
         NameExpr className = fieldAccessExpr.getScope().asNameExpr();
         String field = fieldAccessExpr.getNameAsString();
@@ -80,7 +87,7 @@ public class ConstructorAnalyzer {
         parameterTypes.add(fieldAccessExpr.resolve().getType().describe());
     }
 
-    public static void analyzeConstructorDetails(ObjectCreationExpr creationExpr, List<String> parameterTypes,
+    public void analyzeConstructorDetails(ObjectCreationExpr creationExpr, List<String> parameterTypes,
                                            CompilationUnit cu, VariableResolverVisitor variableResolver) {
 
         String currentType = creationExpr.getType().resolve().describe();
@@ -110,7 +117,7 @@ public class ConstructorAnalyzer {
         }
     }
 
-    public static boolean matchesConstructor(ConstructorInfo constructor, List<String> constructorArgs) {
+    public boolean matchesConstructor(ConstructorInfo constructor, List<String> constructorArgs) {
         return constructor.getParameterTypes().size() == constructorArgs.size() &&
                 constructor.getParameterTypes().equals(constructorArgs);
     }

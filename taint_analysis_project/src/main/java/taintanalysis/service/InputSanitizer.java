@@ -1,20 +1,57 @@
-package org.example.service;
+package taintanalysis.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import org.apache.commons.collections4.CollectionUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.safety.Safelist;
 import org.xml.sax.InputSource;
+import taintanalysis.config.ConfigLoader;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.IOException;
 import java.io.StringReader;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class InputSanitizer {
+
+    public Map<String, String> creationMapping() {
+        // Mappatura: Nome della sorgente -> Metodo di sanitizzazione
+        Map<String, String> sanitizationMethods = new HashMap<>();
+
+        // TODO: Rimuovere try/catch confinando la logica legata all'eccezione su classe di eccezione e/o FileUtils
+        try {
+            // Leggi il file di configurazione e ottieni i nomi delle sorgenti con trusted=false
+            List<String> inputSources = ConfigLoader.getInstance().getUntrustedSources();
+
+            if (CollectionUtils.isNotEmpty(inputSources)) {
+                // Creazione della mappatura
+                for (String source : inputSources) {
+                    String methodName = "sanitize" + capitalizeFirstLetter(source);
+                    sanitizationMethods.put(source, "InputSanitizer." + methodName);
+                }
+            }
+
+        } catch (IOException e) {
+            System.err.println("Errore durante la lettura del file di configurazione: " + e.getMessage());
+        }
+        return sanitizationMethods;
+    }
+
+    // Metodo per capitalizzare la prima lettera di una stringa
+    private String capitalizeFirstLetter(String input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+        return input.substring(0, 1).toUpperCase() + input.substring(1);
+    }
 
     public static String sanitizeUserInput(String input) {
         if (input == null) {

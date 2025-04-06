@@ -1,4 +1,4 @@
-package org.example.config;
+package taintanalysis.config;
 
 import lombok.Getter;
 import lombok.Setter;

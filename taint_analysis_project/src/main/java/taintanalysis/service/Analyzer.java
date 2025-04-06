@@ -1,41 +1,43 @@
-package org.example.service;
+package taintanalysis.service;
 
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import com.github.javaparser.ParserConfiguration;
-import org.example.config.ConfigLoader;
-import org.example.config.Source;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+//import lombok.extern.slf4j.Slf4j;
+import taintanalysis.config.ConfigLoader;
+import taintanalysis.config.Source;
+import taintanalysis.error.ErrorException;
+import taintanalysis.utils.FileUtils;
 
 import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.*;
 
+//@Slf4j
 public class Analyzer {
 
-    private static ConfigLoader configLoader;
+    private final ConfigLoader configLoader;
     private final String[] commandLineArgs;
-    private static CompilationUnit cu;
-    private static Map<String, String> sanitizationMapping;
+    private CompilationUnit cu;
+    private Map<String, String> sanitizationMapping;
 
-    public Analyzer(ConfigLoader loader, String[] args, String configFilePath) {
-        configLoader = loader;
+    public Analyzer(String[] args) {
+        configLoader = ConfigLoader.getInstance();
         this.commandLineArgs = args;
-        sanitizationMapping = InputSanitizerMapping.creationMapping(configFilePath);
+        sanitizationMapping = new InputSanitizer().creationMapping();
     }
 
     private JavaParser parserSetting() {
@@ -49,7 +51,10 @@ public class Analyzer {
         return new JavaParser(parserConfiguration);
     }
 
-    public void analyze(String sourceFilePath) throws IOException {
+    public void analyze(String sourceFilePath) throws IOException, ErrorException {
+
+        System.out.println("Path in arrivo ad Analyzer: " + sourceFilePath);
+
         JavaParser javaParser = parserSetting();
         FileInputStream in = new FileInputStream(sourceFilePath);
         cu = javaParser.parse(in).getResult().orElseThrow();
@@ -58,11 +63,7 @@ public class Analyzer {
         MethodCallVisitor methodCallVisitor = new MethodCallVisitor();
         methodCallVisitor.visit(cu, null);
 
-        // Scrivi il codice modificato in un nuovo file
-        String outputPath = "src/main/java/org/example/destination/ClassToAnalyze2.java";
-        Files.write(Paths.get(outputPath), cu.toString().getBytes());
-
-        System.out.println("File aggiornato scritto in: " + outputPath);
+        FileUtils.writeOutputFile(sourceFilePath, cu);
 
         analyzeCommandLineArgs();
     }
@@ -83,8 +84,7 @@ public class Analyzer {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static class MethodCallVisitor extends VoidVisitorAdapter<Void> {
+    private class MethodCallVisitor extends VoidVisitorAdapter<Void> {
 
         private final VariableResolverVisitor variableResolver;
 
@@ -128,8 +128,7 @@ public class Analyzer {
 
                             // Analizza il costruttore e i parametri
                             constructorScope(scope, constructorParameterTypes);
-                        }
-                        else {
+                        } else {
                             System.out.println("Il metodo è statico.");
                             staticMethod = true;
                         }
@@ -236,7 +235,7 @@ public class Analyzer {
                 if (initializer.isObjectCreationExpr()) {
                     ObjectCreationExpr creationExpr = initializer.asObjectCreationExpr();
                     System.out.println("Oggetto creato: " + creationExpr);
-                    ConstructorAnalyzer.analyzeConstructorDetails(creationExpr, constructorParameterTypes, cu, variableResolver);
+                    ConstructorAnalyzer.getInstance().analyzeConstructorDetails(creationExpr, constructorParameterTypes, cu, variableResolver);
                     Collections.reverse(constructorParameterTypes);
                 }
             });
@@ -246,7 +245,7 @@ public class Analyzer {
 
             if (sanitizationMapping.containsKey(source)) {
                 String sanitizedCall = sanitizationMapping.get(source)
-                                                          .concat("(" + methodCall.toString() + ")");
+                        .concat("(" + methodCall.toString() + ")");
                 // Sostituisce l'espressione corrente con quella nuova
                 methodCall.replace(StaticJavaParser.parseExpression(sanitizedCall));
             } else {
@@ -254,6 +253,12 @@ public class Analyzer {
             }
         }
 
+        // TODO: gestire gli output utilizzando un aspetto specifico per i log.
+        /*
+            Idea: utilizzare @AfterReturning come tipologia di advice per catturare il risultato dell'esecuzione
+            di configLoader.getSourceDetailsForResolvedType(...), così da eseguire l'if sullo stesso advice, stampare ciò che
+            serve (qualora l'if dia esito positivo) e richiamare il metodo insertSanitizeMethod(...), come fatto qui sotto.
+        */
         private void compareWithConfigurationData(List<String> parameterTypes, String className,
                                                   MethodCallExpr methodCall, boolean staticMethod) {
             String currentMethod = methodCall.getNameAsString().concat("()");
