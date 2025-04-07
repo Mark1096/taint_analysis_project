@@ -1,4 +1,4 @@
-package org.example.service;
+package taintanalysis.service;
 
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
@@ -7,6 +7,8 @@ import com.github.javaparser.resolution.types.ResolvedType;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import static taintanalysis.error.ErrorCode.generateException;
 
 public class VariableResolverVisitor extends VoidVisitorAdapter<Void> {
 
@@ -18,7 +20,8 @@ public class VariableResolverVisitor extends VoidVisitorAdapter<Void> {
                 ResolvedType resolvedType = var.getType().resolve();
                 resolvedVariables.put(var.getNameAsString(), resolvedType);
             } catch (Exception e) {
-                System.err.println("Error resolving type for variable " + var.getNameAsString() + ": " + e.getMessage());
+                //System.err.println("Error resolving type for variable " + var.getNameAsString() + ": " + e.getMessage());
+                throw generateException(e);
             }
         }
         super.visit(declaration, arg);

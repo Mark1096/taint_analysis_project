@@ -8,7 +8,6 @@ import taintanalysis.utils.FileUtils;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,24 +20,17 @@ public class ConfigLoader {
     public static ConfigLoader configLoader = new ConfigLoader();;
 
     private ConfigLoader() {
-        sourcesConfiguration();
+        Gson gson = new Gson();
+        try {
+            var config = gson.fromJson(new FileReader(CONFIG_FILE_PATH), Config.class);
+            insertSources(config);
+        } catch (FileNotFoundException e) {
+            throw generateRuntimeException(e);
+        }
     }
 
     public static ConfigLoader getInstance() {
         return configLoader;
-    }
-
-    // TODO: capire se è possibile catturare l'eccezione per reindirizzarla alla classe apposita.
-    public void sourcesConfiguration() {
-        Gson gson = new Gson();
-        Config config;
-        try {
-            config = gson.fromJson(new FileReader(CONFIG_FILE_PATH), Config.class);
-            insertSources(config);
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-
     }
 
     private void insertSources(Config config) {
@@ -60,7 +52,7 @@ public class ConfigLoader {
     }
 
     // Metodo per ottenere i nomi delle sorgenti con trusted=false
-    public List<String> getUntrustedSources() throws IOException {
+    public List<String> getUntrustedSources() {
         JsonNode rootNode = FileUtils.getConfigInformation();
 
         // Estrai le sorgenti non fidate
@@ -86,11 +78,6 @@ public class ConfigLoader {
                         }))
                 .findFirst()
                 .orElse(null);
-    }
-
-    // TODO: valutare la possibilità di spostare questa classe in un file a parte.
-    private static class Config {
-        public List<Source> sources;
     }
 
 }

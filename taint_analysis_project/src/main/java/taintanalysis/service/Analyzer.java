@@ -2,76 +2,65 @@ package taintanalysis.service;
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.*;
-import com.github.javaparser.ast.expr.*;
-import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
-import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
-import com.github.javaparser.resolution.types.ResolvedType;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
-//import lombok.extern.slf4j.Slf4j;
+import org.apache.maven.shared.utils.StringUtils;
 import taintanalysis.config.ConfigLoader;
-import taintanalysis.config.Source;
 import taintanalysis.error.ErrorException;
-import taintanalysis.utils.FileUtils;
 
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.Arrays;
+
+import static taintanalysis.utils.FileUtils.getFileInputStream;
+import static taintanalysis.utils.FileUtils.writeOutputFile;
 
 //@Slf4j
 public class Analyzer {
 
     private final ConfigLoader configLoader;
     private final String[] commandLineArgs;
-    private CompilationUnit cu;
-    private Map<String, String> sanitizationMapping;
 
     public Analyzer(String[] args) {
         configLoader = ConfigLoader.getInstance();
         this.commandLineArgs = args;
-        sanitizationMapping = new InputSanitizer().creationMapping();
     }
 
     private JavaParser parserSetting() {
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
+        var combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(Paths.get("src/main/java")));
 
-        ParserConfiguration parserConfiguration = new ParserConfiguration()
+        var parserConfiguration = new ParserConfiguration()
                 .setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
 
         return new JavaParser(parserConfiguration);
     }
 
-    public void analyze(String sourceFilePath) throws IOException, ErrorException {
-
+    public void analyze(String sourceFilePath) {
         System.out.println("Path in arrivo ad Analyzer: " + sourceFilePath);
 
         JavaParser javaParser = parserSetting();
-        FileInputStream in = new FileInputStream(sourceFilePath);
-        cu = javaParser.parse(in).getResult().orElseThrow();
+        CompilationUnit cu = javaParser.parse(getFileInputStream(sourceFilePath))
+                .getResult()
+                .orElseThrow();
 
         // Usa MethodCallVisitor con il resolver integrato
-        MethodCallVisitor methodCallVisitor = new MethodCallVisitor();
+        var methodCallVisitor = new MethodCallVisitor(cu);
         methodCallVisitor.visit(cu, null);
 
-        FileUtils.writeOutputFile(sourceFilePath, cu);
+        writeOutputFile(sourceFilePath, cu.toString());
 
         analyzeCommandLineArgs();
     }
 
     private boolean isValid(String arg) {
-        return arg != null && arg.matches("[a-zA-Z0-9]+");
+        return StringUtils.isNotBlank(arg) && arg.matches("[a-zA-Z0-9]+");
     }
 
+    // TODO: Understanding how to deal with input text at the security level
     private void analyzeCommandLineArgs() {
         boolean isTrusted = configLoader.isSourceTrusted("commandLineArgs");
         System.out.println("Trusted status for commandLineArgs: " + isTrusted);
@@ -84,194 +73,4 @@ public class Analyzer {
         }
     }
 
-    private class MethodCallVisitor extends VoidVisitorAdapter<Void> {
-
-        private final VariableResolverVisitor variableResolver;
-
-        public MethodCallVisitor() {
-            this.variableResolver = new VariableResolverVisitor();
-        }
-
-        @Override
-        public void visit(MethodCallExpr methodCall, Void arg) {
-
-            System.out.println("Metodo da analizzare: " + methodCall.getName());
-
-            // Verifica se la chiamata a metodo è un argomento di un'altra espressione
-            if (isNestedMethodCall(methodCall)) {
-                System.out.println("Il metodo: " + methodCall.getName() + " è un argomento di un construttore o di un altro metodo!");
-                System.out.println("-------------------------------------------");
-                return;
-            }
-
-            methodCall.getScope().ifPresent(scope -> {
-                try {
-
-                    ResolvedType resolvedType = scope.calculateResolvedType();
-
-                    if (resolvedType.isReferenceType()) {
-
-                        String className = scope.calculateResolvedType().describe();
-                        List<String> constructorParameterTypes = new ArrayList<>();
-                        boolean staticMethod = false;
-
-                        ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
-
-                        if (!resolvedMethod.isStatic()) {
-                            // Trova la dichiarazione della variabile
-                            String variableName = scope.toString();
-
-                            ResolvedType variableType = variableResolver.getResolvedVariableType(variableName);
-                            if (variableType != null) {
-                                System.out.println("Tipo della variabile '" + variableName + "': " + variableType.describe());
-                            }
-
-                            // Analizza il costruttore e i parametri
-                            constructorScope(scope, constructorParameterTypes);
-                        } else {
-                            System.out.println("Il metodo è statico.");
-                            staticMethod = true;
-                        }
-
-                        compareWithConfigurationData(constructorParameterTypes, className, methodCall, staticMethod);
-                    }
-                    System.out.println("-------------------------------------------");
-                } catch (Exception e) {
-                    System.err.println("Error resolving class for method call: " + e.getMessage());
-                }
-            });
-
-            super.visit(methodCall, arg);
-        }
-
-        private boolean isNestedMethodCall(MethodCallExpr methodCall) {
-            return methodCall.getParentNode()
-                    .map(parent -> parent instanceof MethodCallExpr || parent instanceof ObjectCreationExpr)
-                    .orElse(false);
-        }
-
-        private void constructorScope(Expression scope, List<String> constructorParameterTypes) {
-            if (scope.isNameExpr()) {
-                NameExpr nameExpr = scope.asNameExpr();
-                try {
-                    // Trova la dichiarazione originale nello scope corretto
-                    Optional<VariableDeclarator> variableNode = findVariableNodeInScope(nameExpr);
-                    variableNode.ifPresent(variable -> analyzeVariableInitializer(variable, constructorParameterTypes));
-                } catch (UnsolvedSymbolException e) {
-                    System.err.println("Impossibile risolvere il simbolo per: " + nameExpr.getNameAsString());
-                    System.out.println("Error: " + e.getMessage());
-                }
-            }
-        }
-
-        private Optional<VariableDeclarator> checkIntoLocalScope(NameExpr nameExpr) {
-            // Cerca nello scope locale (blocco di codice)
-            Optional<BlockStmt> blockScope = nameExpr.findAncestor(BlockStmt.class.asSubclass(BlockStmt.class));
-
-            if (blockScope.isPresent()) {
-                Optional<VariableDeclarator> localVariable = blockScope.get().findAll(VariableDeclarator.class).stream()
-                        .filter(v -> v.getNameAsString().equals(nameExpr.getNameAsString()))
-                        .findFirst();
-                if (localVariable.isPresent()) {
-                    return localVariable;
-                }
-            }
-            return Optional.empty();
-        }
-
-        private Optional<VariableDeclarator> checkIntoMethodScope(NameExpr nameExpr) {
-            // Cerca nello scope del metodo
-            Optional<MethodDeclaration> methodScope = nameExpr.findAncestor(MethodDeclaration.class);
-            return methodScope.flatMap(methodDeclaration -> methodDeclaration.getBody()
-                    .flatMap(body -> body.findAll(VariableDeclarator.class).stream()
-                            .filter(v -> v.getNameAsString().equals(nameExpr.getNameAsString()))
-                            .findFirst()));
-        }
-
-        private Optional<VariableDeclarator> checkIntoConstructor(NameExpr nameExpr, ClassOrInterfaceDeclaration classScope) {
-            Optional<ConstructorDeclaration> constructor = classScope.findFirst(ConstructorDeclaration.class);
-            if (constructor.isPresent()) {
-                Optional<VariableDeclarator> initializedInConstructor = constructor.get().getBody()
-                        .findAll(AssignExpr.class).stream()
-                        .filter(assign -> assign.getTarget().isNameExpr())
-                        .filter(assign -> assign.getTarget().asNameExpr().getNameAsString().equals(nameExpr.getNameAsString()))
-                        .map(AssignExpr::getValue)
-                        .filter(Expression::isObjectCreationExpr)
-                        .map(Expression::asObjectCreationExpr)
-                        .map(expr -> new VariableDeclarator(expr.getType(), nameExpr.getNameAsString(), expr))
-                        .findFirst();
-                if (initializedInConstructor.isPresent()) {
-                    return initializedInConstructor;
-                }
-            }
-            return Optional.empty();
-        }
-
-        private Optional<VariableDeclarator> checkIntoClassFields(NameExpr nameExpr) {
-            // Cerca nei campi della classe
-            Optional<ClassOrInterfaceDeclaration> classScope = nameExpr.findAncestor(ClassOrInterfaceDeclaration.class);
-            if (classScope.isPresent()) {
-                // Cerca campi dichiarati nella classe
-                Optional<VariableDeclarator> fieldVariable = classScope.get().findAll(FieldDeclaration.class).stream()
-                        .flatMap(field -> field.getVariables().stream())
-                        .filter(v -> v.getNameAsString().equals(nameExpr.getNameAsString()))
-                        .findFirst();
-
-                return fieldVariable.isPresent() ? fieldVariable : checkIntoConstructor(nameExpr, classScope.get());
-            }
-            return Optional.empty();
-        }
-
-        // Metodo per trovare la dichiarazione di una variabile nello scope corretto
-        private Optional<VariableDeclarator> findVariableNodeInScope(NameExpr nameExpr) {
-
-            return checkIntoLocalScope(nameExpr)
-                    .or(() -> checkIntoMethodScope(nameExpr))
-                    .or(() -> checkIntoClassFields(nameExpr));
-        }
-
-        private void analyzeVariableInitializer(VariableDeclarator variable, List<String> constructorParameterTypes) {
-            variable.getInitializer().ifPresent(initializer -> {
-                if (initializer.isObjectCreationExpr()) {
-                    ObjectCreationExpr creationExpr = initializer.asObjectCreationExpr();
-                    System.out.println("Oggetto creato: " + creationExpr);
-                    ConstructorAnalyzer.getInstance().analyzeConstructorDetails(creationExpr, constructorParameterTypes, cu, variableResolver);
-                    Collections.reverse(constructorParameterTypes);
-                }
-            });
-        }
-
-        private void insertSanitizeMethod(MethodCallExpr methodCall, String source) {
-
-            if (sanitizationMapping.containsKey(source)) {
-                String sanitizedCall = sanitizationMapping.get(source)
-                        .concat("(" + methodCall.toString() + ")");
-                // Sostituisce l'espressione corrente con quella nuova
-                methodCall.replace(StaticJavaParser.parseExpression(sanitizedCall));
-            } else {
-                System.out.println("Chiave '" + source + "' non trovata nella mappa.");
-            }
-        }
-
-        // TODO: gestire gli output utilizzando un aspetto specifico per i log.
-        /*
-            Idea: utilizzare @AfterReturning come tipologia di advice per catturare il risultato dell'esecuzione
-            di configLoader.getSourceDetailsForResolvedType(...), così da eseguire l'if sullo stesso advice, stampare ciò che
-            serve (qualora l'if dia esito positivo) e richiamare il metodo insertSanitizeMethod(...), come fatto qui sotto.
-        */
-        private void compareWithConfigurationData(List<String> parameterTypes, String className,
-                                                  MethodCallExpr methodCall, boolean staticMethod) {
-            String currentMethod = methodCall.getNameAsString().concat("()");
-            Source constructorDetails = configLoader.getSourceDetailsForResolvedType(className, currentMethod, parameterTypes, staticMethod);
-
-            if (constructorDetails != null && !constructorDetails.isTrusted()) {
-                System.out.println("Warning: Object created with untrusted constructor:");
-                System.out.println("  Class: " + className);
-                System.out.println("  Parameters: " + parameterTypes);
-                System.out.println("  Source: " + constructorDetails.getName());
-                System.out.println("  Trusted: " + constructorDetails.isTrusted());
-                insertSanitizeMethod(methodCall, constructorDetails.getName());
-            }
-        }
-    }
 }

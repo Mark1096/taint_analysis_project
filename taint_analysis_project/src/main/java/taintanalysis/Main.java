@@ -15,7 +15,7 @@ public class Main {
         List<String> sourcesList = FileUtils.getSourcesList();
 
         if (sourcesList.isEmpty()) {
-            throw generateErrorException(ErrorCode.FILE_NOT_FOUND);
+            throw generateErrorException(ErrorCode.JAVA_FILE_NOT_FOUND);
         }
 
         // TODO : Aggiungere log tramite slf4j e configurazione di logging patter (vedi houseofpizza -> "# logging level")

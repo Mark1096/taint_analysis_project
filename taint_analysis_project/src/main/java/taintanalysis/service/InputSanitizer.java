@@ -14,7 +14,6 @@ import taintanalysis.config.ConfigLoader;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import java.io.IOException;
 import java.io.StringReader;
 import java.util.HashMap;
 import java.util.List;
@@ -26,22 +25,17 @@ public class InputSanitizer {
         // Mappatura: Nome della sorgente -> Metodo di sanitizzazione
         Map<String, String> sanitizationMethods = new HashMap<>();
 
-        // TODO: Rimuovere try/catch confinando la logica legata all'eccezione su classe di eccezione e/o FileUtils
-        try {
-            // Leggi il file di configurazione e ottieni i nomi delle sorgenti con trusted=false
-            List<String> inputSources = ConfigLoader.getInstance().getUntrustedSources();
+        // Leggi il file di configurazione e ottieni i nomi delle sorgenti con trusted=false
+        List<String> inputSources = ConfigLoader.getInstance().getUntrustedSources();
 
-            if (CollectionUtils.isNotEmpty(inputSources)) {
-                // Creazione della mappatura
-                for (String source : inputSources) {
-                    String methodName = "sanitize" + capitalizeFirstLetter(source);
-                    sanitizationMethods.put(source, "InputSanitizer." + methodName);
-                }
+        if (CollectionUtils.isNotEmpty(inputSources)) {
+            // Creazione della mappatura
+            for (String source : inputSources) {
+                String methodName = "sanitize" + capitalizeFirstLetter(source);
+                sanitizationMethods.put(source, "InputSanitizer." + methodName);
             }
-
-        } catch (IOException e) {
-            System.err.println("Errore durante la lettura del file di configurazione: " + e.getMessage());
         }
+
         return sanitizationMethods;
     }
 
