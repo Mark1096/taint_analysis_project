@@ -16,6 +16,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
@@ -124,8 +125,13 @@ public class FileUtils {
      */
     public static void writeOutputFile(String sourceFilePath, String fileContent) {
         String fileName = Paths.get(sourceFilePath).getFileName().toString();
+        Path destinationDir = Paths.get(DESTINATION_BASE_PATH);
+        Path destinationFile = destinationDir.resolve(fileName);
         try {
-            Files.write(Paths.get(DESTINATION_BASE_PATH + fileName), fileContent.getBytes());
+            if (Files.notExists(destinationDir)) {
+                Files.createDirectories(destinationDir);
+            }
+            Files.write(destinationFile, fileContent.getBytes());
         } catch (Exception e) {
             throw generateException(e);
         }
