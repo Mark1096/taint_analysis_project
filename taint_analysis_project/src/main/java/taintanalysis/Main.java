@@ -1,32 +1,40 @@
 package taintanalysis;
 
+import com.github.javaparser.ast.CompilationUnit;
 import taintanalysis.error.ErrorCode;
-import taintanalysis.service.Analyzer;
+import taintanalysis.service.MethodCallVisitor;
 import taintanalysis.utils.FileUtils;
 import java.util.List;
 
 import static taintanalysis.error.ErrorCode.generateErrorException;
-import static taintanalysis.utils.FileUtils.SOURCE_BASE_PATH;
+import static taintanalysis.utils.FileUtils.*;
 
+/**
+ * <h1> Taint Analysis </h1>
+ *
+ * This program aims to analyze Java files, inspecting their source code and identifying areas where data from external sources is being used,
+ * mitigating the risk by applying input sanitization methods.
+ */
 public class Main {
 
+    /**
+     * This is the main method from which methods to analyze user files will be called.
+     *
+     * @param args the input arguments
+     * @throws Exception the exception
+     */
     public static void main(String[] args) throws Exception {
 
         List<String> sourcesList = FileUtils.getSourcesList();
 
-        if (sourcesList.isEmpty()) {
+        if (sourcesList.isEmpty())
             throw generateErrorException(ErrorCode.JAVA_FILE_NOT_FOUND);
-        }
 
-        // TODO : Aggiungere log tramite slf4j e configurazione di logging patter (vedi houseofpizza -> "# logging level")
-        System.out.println("sourcesList: " + sourcesList);
-
-        //Analyzer analyzer = new Analyzer(loader, args);
-        Analyzer analyzer = new Analyzer(args);
-
-        // Analisi del file sorgente specificato
         for (String fileName : sourcesList) {
-            analyzer.analyze(SOURCE_BASE_PATH + fileName);
+            CompilationUnit cu = retrieveCompilationUnit(SOURCE_BASE_PATH + fileName);
+            var methodCallVisitor = new MethodCallVisitor(cu);
+            methodCallVisitor.visit(cu, null);
+            writeOutputFile(SOURCE_BASE_PATH + fileName, cu.toString());
         }
 
     }

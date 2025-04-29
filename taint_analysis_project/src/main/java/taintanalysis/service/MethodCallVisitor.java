@@ -7,8 +7,6 @@ import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
-import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
-import com.github.javaparser.resolution.types.ResolvedType;
 import taintanalysis.config.ConfigLoader;
 import taintanalysis.config.Source;
 
@@ -19,91 +17,102 @@ import java.util.Optional;
 
 import static taintanalysis.error.ErrorCode.generateException;
 
+/**
+ * <h1> MethodCallVisitor </h1>
+ *
+ * This class is part of the JavaParser AST and is used to solve the search for methods.
+ */
 public class MethodCallVisitor extends VoidVisitorAdapter<Void> {
 
-    private final VariableResolverVisitor variableResolver;
     private final ConfigLoader configLoader;
     private final CompilationUnit cu;
 
     public MethodCallVisitor(CompilationUnit cu) {
         this.cu = cu;
-        this.variableResolver = new VariableResolverVisitor();
         configLoader = ConfigLoader.getInstance();
     }
 
+    /**
+     * It inspects source code methods for data from external sources.
+     *
+     * @param methodCall the method call
+     * @param arg the arg
+     */
     @Override
     public void visit(MethodCallExpr methodCall, Void arg) {
-        System.out.println("Metodo da analizzare: " + methodCall.getName());
+        analyzeMethodCall(methodCall, arg);
+    }
 
-        // Verifica se la chiamata a metodo è un argomento di un'altra espressione
-        if (isNestedMethodCall(methodCall)) {
-            System.out.println("Il metodo: " + methodCall.getName() + " è un argomento di un construttore o di un altro metodo!");
-            System.out.println("-------------------------------------------");
+    /**
+     * It analyses the input method, checking the type of data passed to the input source.
+     *
+     * @param methodCall the method call
+     * @param arg the arg
+     */
+    private void analyzeMethodCall(MethodCallExpr methodCall, Void arg) {
+
+        if (isNestedMethodCall(methodCall))
             return;
-        }
 
         methodCall.getScope().ifPresent(scope -> {
             try {
-
-                ResolvedType resolvedType = scope.calculateResolvedType();
-
-                if (resolvedType.isReferenceType()) {
+                if (scope.calculateResolvedType().isReferenceType()) {
                     String className = scope.calculateResolvedType().describe();
                     List<String> constructorParameterTypes = new ArrayList<>();
                     boolean staticMethod = false;
 
-                    ResolvedMethodDeclaration resolvedMethod = methodCall.resolve();
-                    if (!resolvedMethod.isStatic()) {
-                        // Trova la dichiarazione della variabile
-                        String variableName = scope.toString();
-
-                        ResolvedType variableType = variableResolver.getResolvedVariableType(variableName);
-                        if (variableType != null) {
-                            System.out.println("Tipo della variabile '" + variableName + "': " + variableType.describe());
-                        }
-
-                        // Analizza il costruttore e i parametri
+                    if (!(methodCall.resolve().isStatic())) {
                         constructorScope(scope, constructorParameterTypes);
                     } else {
-                        System.out.println("Il metodo è statico.");
                         staticMethod = true;
                     }
 
                     compareWithConfigurationData(constructorParameterTypes, className, methodCall, staticMethod);
                 }
-                System.out.println("-------------------------------------------");
             } catch (Exception e) {
-                //System.err.println("Error resolving class for method call: " + e.getMessage());
                 throw generateException(e);
             }
         });
-
         super.visit(methodCall, arg);
     }
 
+    /**
+     * Check whether the method to be analyzed is nested in another method.
+     *
+     * @param methodCall the method call
+     * @return boolean
+     */
     private boolean isNestedMethodCall(MethodCallExpr methodCall) {
         return methodCall.getParentNode()
                 .map(parent -> parent instanceof MethodCallExpr || parent instanceof ObjectCreationExpr)
                 .orElse(false);
     }
 
+    /**
+     * It searches the variable declaration at any scope level and analyses the constructor parameters.
+     *
+     * @param scope the scope
+     * @param constructorParameterTypes the constructor parameter types
+     */
     private void constructorScope(Expression scope, List<String> constructorParameterTypes) {
         if (scope.isNameExpr()) {
             NameExpr nameExpr = scope.asNameExpr();
             try {
-                // Trova la dichiarazione originale nello scope corretto
                 Optional<VariableDeclarator> variableNode = findVariableNodeInScope(nameExpr);
                 variableNode.ifPresent(variable -> analyzeVariableInitializer(variable, constructorParameterTypes));
             } catch (UnsolvedSymbolException e) {
-                //System.err.println("Impossibile risolvere il simbolo per: " + nameExpr.getNameAsString());
-                //System.out.println("Error: " + e.getMessage());
                 throw generateException(e);
             }
         }
     }
 
+    /**
+     * Look for the variable declaration within the scope of the block.
+     *
+     * @param nameExpr the name expr
+     * @return optional variable declarator
+     */
     private Optional<VariableDeclarator> checkIntoLocalScope(NameExpr nameExpr) {
-        // Cerca nello scope locale (blocco di codice)
         Optional<BlockStmt> blockScope = nameExpr.findAncestor(BlockStmt.class.asSubclass(BlockStmt.class));
 
         if (blockScope.isPresent()) {
@@ -117,8 +126,13 @@ public class MethodCallVisitor extends VoidVisitorAdapter<Void> {
         return Optional.empty();
     }
 
+    /**
+     * Look for the variable declaration within the method of the class in which the current method is being analyzed.
+     *
+     * @param nameExpr the name expr
+     * @return optional variable declarator
+     */
     private Optional<VariableDeclarator> checkIntoMethodScope(NameExpr nameExpr) {
-        // Cerca nello scope del metodo
         Optional<MethodDeclaration> methodScope = nameExpr.findAncestor(MethodDeclaration.class);
         return methodScope.flatMap(methodDeclaration -> methodDeclaration.getBody()
                 .flatMap(body -> body.findAll(VariableDeclarator.class).stream()
@@ -126,6 +140,13 @@ public class MethodCallVisitor extends VoidVisitorAdapter<Void> {
                         .findFirst()));
     }
 
+    /**
+     * Look for the variable declaration in the instantiation of the object, then check the constructor.
+     *
+     * @param nameExpr the name expr
+     * @param classScope the class scope
+     * @return optional variable declarator
+     */
     private Optional<VariableDeclarator> checkIntoConstructor(NameExpr nameExpr, ClassOrInterfaceDeclaration classScope) {
         Optional<ConstructorDeclaration> constructor = classScope.findFirst(ConstructorDeclaration.class);
         if (constructor.isPresent()) {
@@ -145,71 +166,93 @@ public class MethodCallVisitor extends VoidVisitorAdapter<Void> {
         return Optional.empty();
     }
 
+    /**
+     * Look for the variable declaration in the fields of the class.
+     *
+     * @param nameExpr the name expr
+     * @return optional variable declarator
+     */
     private Optional<VariableDeclarator> checkIntoClassFields(NameExpr nameExpr) {
-        // Cerca nei campi della classe
         Optional<ClassOrInterfaceDeclaration> classScope = nameExpr.findAncestor(ClassOrInterfaceDeclaration.class);
         if (classScope.isPresent()) {
-            // Cerca campi dichiarati nella classe
             Optional<VariableDeclarator> fieldVariable = classScope.get().findAll(FieldDeclaration.class).stream()
                     .flatMap(field -> field.getVariables().stream())
                     .filter(v -> v.getNameAsString().equals(nameExpr.getNameAsString()))
                     .findFirst();
-
             return fieldVariable.isPresent() ? fieldVariable : checkIntoConstructor(nameExpr, classScope.get());
         }
         return Optional.empty();
     }
 
-    // Metodo per trovare la dichiarazione di una variabile nello scope corretto
+    /**
+     * Method for finding the declaration of a variable in the correct scope.
+     *
+     * @param nameExpr the name expr
+     * @return optional variable declarator
+     */
     private Optional<VariableDeclarator> findVariableNodeInScope(NameExpr nameExpr) {
-
         return checkIntoLocalScope(nameExpr)
                 .or(() -> checkIntoMethodScope(nameExpr))
                 .or(() -> checkIntoClassFields(nameExpr));
     }
 
+    /**
+     * Converts an expression into an ObjectCreationExpr.
+     *
+     * @param expr the expr
+     * @return object creation expr
+     */
+    private ObjectCreationExpr convertToObjectCreationExpr(Expression expr) {
+        return expr.asObjectCreationExpr();
+    }
+
+    /**
+     * Analyses the instantiation of the object provided as input,
+     * obtaining the types of the parameters passed to the constructor.
+     *
+     * @param variable the variable
+     * @param constructorParameterTypes the constructor parameter types
+     */
     private void analyzeVariableInitializer(VariableDeclarator variable, List<String> constructorParameterTypes) {
         variable.getInitializer().ifPresent(initializer -> {
             if (initializer.isObjectCreationExpr()) {
-                ObjectCreationExpr creationExpr = initializer.asObjectCreationExpr();
-                System.out.println("Oggetto creato: " + creationExpr);
-                ConstructorAnalyzer.getInstance().analyzeConstructorDetails(creationExpr, constructorParameterTypes, cu, variableResolver);
+                ObjectCreationExpr creationExpr = convertToObjectCreationExpr(initializer);
+                ConstructorAnalyzer.getInstance().analyzeConstructorDetails(creationExpr, constructorParameterTypes, cu);
                 Collections.reverse(constructorParameterTypes);
             }
         });
     }
 
-    private void insertSanitizeMethod(MethodCallExpr methodCall,
-                                      String source) {
+    /**
+     * It applies input sanitization where an untrusted external source has been detected in the user's source code.
+     *
+     * @param methodCall the method call
+     * @param source the source
+     */
+    private void insertSanitizeMethod(MethodCallExpr methodCall, String source) {
         var sanitizationMapping = new InputSanitizer().creationMapping();
         if (sanitizationMapping.containsKey(source)) {
-            String sanitizedCall = sanitizationMapping.get(source)
-                    .concat("(" + methodCall.toString() + ")");
-            // Sostituisce l'espressione corrente con quella nuova
+            String sanitizedCall = sanitizationMapping.get(source).concat("(" + methodCall.toString() + ")");
             methodCall.replace(StaticJavaParser.parseExpression(sanitizedCall));
         } else {
-            System.out.println("Chiave '" + source + "' non trovata nella mappa.");
+            System.out.println("Key '" + source + "' not found in the map.");
         }
     }
 
-    // TODO: gestire gli output utilizzando un aspetto specifico per i log.
-    //  Idea: utilizzare @AfterReturning come tipologia di advice per catturare il risultato dell'esecuzione
-    //  di configLoader.getSourceDetailsForResolvedType(...), così da eseguire l'if sullo stesso advice, stampare ciò che
-    //  serve (qualora l'if dia esito positivo) e richiamare il metodo insertSanitizeMethod(...), come fatto qui sotto.
-
+    /**
+     * It compares the source information of the configuration file with that obtained from the analysis of the current method.
+     *
+     * @param parameterTypes the parameter types
+     * @param className the class name
+     * @param methodCall the method call
+     * @param staticMethod the static method
+     */
     private void compareWithConfigurationData(List<String> parameterTypes, String className,
                                               MethodCallExpr methodCall, boolean staticMethod) {
         String currentMethod = methodCall.getNameAsString().concat("()");
         Source constructorDetails = configLoader.getSourceDetailsForResolvedType(className, currentMethod, parameterTypes, staticMethod);
 
         if (constructorDetails != null && !constructorDetails.isTrusted()) {
-            // TODO: togliere i log da qui e inserirli in un advice dell'aspetto adibito alla gestione dell'output.
-            System.out.println("Warning: Object created with untrusted constructor:");
-            System.out.println("  Class: " + className);
-            System.out.println("  Parameters: " + parameterTypes);
-            System.out.println("  Source: " + constructorDetails.getName());
-            System.out.println("  Trusted: " + constructorDetails.isTrusted());
-
             insertSanitizeMethod(methodCall, constructorDetails.getName());
         }
     }

@@ -19,27 +19,37 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * <h1> InputSanitizer </h1>
+ *
+ * This class is used to provide sanitization methods to be applied to untrusted input data.
+ */
 public class InputSanitizer {
 
+    /**
+     * Map the name of the external data source to a specific sanitization method.
+     *
+     * @return map string string
+     */
     public Map<String, String> creationMapping() {
-        // Mappatura: Nome della sorgente -> Metodo di sanitizzazione
         Map<String, String> sanitizationMethods = new HashMap<>();
-
-        // Leggi il file di configurazione e ottieni i nomi delle sorgenti con trusted=false
         List<String> inputSources = ConfigLoader.getInstance().getUntrustedSources();
 
         if (CollectionUtils.isNotEmpty(inputSources)) {
-            // Creazione della mappatura
             for (String source : inputSources) {
                 String methodName = "sanitize" + capitalizeFirstLetter(source);
                 sanitizationMethods.put(source, "InputSanitizer." + methodName);
             }
         }
-
         return sanitizationMethods;
     }
 
-    // Metodo per capitalizzare la prima lettera di una stringa
+    /**
+     * If the input string is not null, set its first letter to uppercase.
+     *
+     * @param input the input
+     * @return string
+     */
     private String capitalizeFirstLetter(String input) {
         if (input == null || input.isEmpty()) {
             return input;
@@ -47,133 +57,161 @@ public class InputSanitizer {
         return input.substring(0, 1).toUpperCase() + input.substring(1);
     }
 
+    /**
+     * Applies sanitization of user-supplied input.
+     *
+     * @param input the input
+     * @return string
+     */
     public static String sanitizeUserInput(String input) {
         if (input == null) {
             return "";
         }
 
-        // Step 1: Rimuovi tag HTML per prevenire XSS
-        input = input.replaceAll("<[^>]*>", ""); // Elimina tutti i tag HTML/XML.
+        // Step 1: Remove HTML tags to prevent XSS.
+        input = input.replaceAll("<[^>]*>", "");
 
-        // Step 2: Rimuovi script e codici JS potenzialmente nascosti
+        // Step 2: Remove potentially hidden scripts and JS codes.
         input = input.replaceAll("(?i)(<script.*?>.*?</script>|javascript:|on\\w+=)", "");
 
-        // Step 3: Rimuovi parole chiave SQL per prevenire SQL Injection
+        // Step 3: Remove SQL keywords to prevent SQL Injection.
         input = input.replaceAll("(?i)(DROP|SELECT|INSERT|DELETE|UPDATE|TABLE|FROM|WHERE|--|;|\\*|=)", "");
 
-        // Step 4: Blocca caratteri speciali non sicuri
-        input = input.replaceAll("[^a-zA-Z0-9 .,!?@#%&()_-]", ""); // Alfanumerici e simboli sicuri.
+        // Step 4: Block unsafe special characters.
+        input = input.replaceAll("[^a-zA-Z0-9 .,!?@#%&()_-]", "");
 
-        // Step 5: Normalizza sequenze Unicode sospette
+        // Step 5: Normalizes suspicious Unicode sequences.
         input = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFKC);
 
-        // Step 6: Limita la lunghezza massima dell'input
+        // Step 6: Limits the maximum length of the input.
         if (input.length() > 1024) {
             input = input.substring(0, 1024);
         }
 
-        // Step 7: Trim e rimuovi spazi in eccesso
+        // Step 7: Trim and remove excess spaces.
         return input.strip();
     }
 
+    /**
+     * It applies sanitization to the input stream.
+     *
+     * @param input the input
+     * @return string
+     */
     public static String sanitizeStreamInput(String input) {
         if (input == null) {
             return "";
         }
 
-        // Step 1: Rimuovi caratteri null o byte non stampabili
-        input = input.replaceAll("\\p{Cntrl}", ""); // Rimuove caratteri di controllo
+        // Step 1: Remove null characters or unprintable bytes.
+        input = input.replaceAll("\\p{Cntrl}", "");
 
-        // Step 2: Rimuovi tag HTML o XML
-        input = input.replaceAll("<[^>]*>", ""); // Rimuove tag come <script>, <style>, ecc.
+        // Step 2: Remove HTML or XML tags.
+        input = input.replaceAll("<[^>]*>", "");
 
-        // Step 3: Normalizza sequenze Unicode
+        // Step 3: Normalize Unicode sequences.
         input = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFKC);
 
-        // Step 4: Rimuovi script, URI pericolosi, e altri pattern sospetti
+        // Step 4: Remove scripts, dangerous URIs, and other suspicious patterns.
         input = input.replaceAll("(?i)(<script.*?>.*?</script>|javascript:|on\\w+=)", "");
 
-        // Step 5: Blocca parole chiave SQL e simboli dannosi
+        // Step 5: Blocks SQL keywords and malicious symbols.
         input = input.replaceAll("(?i)(DROP|SELECT|INSERT|DELETE|UPDATE|TABLE|FROM|WHERE|--|;|\\*|=)", "");
 
-        // Step 6: Mantieni solo caratteri alfanumerici e simboli di base
-        input = input.replaceAll("[^a-zA-Z0-9 .,!?@#%&()\\[\\]{}:;\"'-_+|/\\\\]", ""); // Blocca simboli non sicuri.
+        // Step 6: Keep only alphanumeric characters and basic symbols.
+        input = input.replaceAll("[^a-zA-Z0-9 .,!?@#%&()\\[\\]{}:;\"'-_+|/\\\\]", "");
 
-        // Step 7: Rimuovi sequenze di directory traversal
-        input = input.replaceAll("(\\.\\./|\\.\\.\\\\)", ""); // Rimuove tentativi di navigazione nel file system.
+        // Step 7: Remove traversal directory sequences.
+        input = input.replaceAll("(\\.\\./|\\.\\.\\\\)", "");
 
-        // Step 8: Limita la lunghezza massima dell'input
-        if (input.length() > 4096) { // Adatta il limite a seconda del contesto di streaming
+        // Step 8: Limits the maximum length of the input.
+        if (input.length() > 4096) {
             input = input.substring(0, 4096);
         }
 
-        // Step 9: Trim e rimuovi spazi multipli
+        // Step 9: Trim and remove multiple spaces.
         return input.replaceAll("\\s+", " ").strip();
     }
 
+    /**
+     * Applies sanitization to command-line supplied arguments.
+     *
+     * @param input the input
+     * @return string
+     */
     public static String sanitizeCommandLineArgs(String input) {
         if (input == null) {
             return "";
         }
 
-        // Step 1: Rimuovi caratteri null o byte non stampabili
-        input = input.replaceAll("\\p{Cntrl}", ""); // Rimuove caratteri di controllo
+        // Step 1: Remove null characters or unprintable bytes.
+        input = input.replaceAll("\\p{Cntrl}", "");
 
-        // Step 2: Normalizza sequenze Unicode per evitare spoofing
+        // Step 2: Normalizes Unicode sequences to avoid spoofing.
         input = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFKC);
 
-        // Step 3: Blocca directory traversal e percorsi assoluti
-        input = input.replaceAll("(\\.{2,}/|\\.{2,}\\\\|~|/|\\\\)", ""); // Blocca traversal o percorsi non sicuri
+        // Step 3: Block traversal directories and absolute paths.
+        input = input.replaceAll("(\\.{2,}/|\\.{2,}\\\\|~|/|\\\\)", "");
 
-        // Step 4: Rimuovi parole chiave sospette specifiche di shell
+        // Step 4: Remove suspicious shell-specific keywords.
         input = input.replaceAll("(?i)(rm -rf|sudo|chmod|chown|kill|shutdown|reboot|mkfs|dd|ps|grep)", "");
 
-        // Step 5: Blocca sequenze e simboli specifici della shell
-        input = input.replaceAll("([$`|;&<>*?!\"'])", ""); // Rimuove simboli dannosi come `$`, `|`, `;`, ecc.
+        // Step 5: Lock shell-specific sequences and symbols.
+        input = input.replaceAll("([$`|;&<>*?!\"'])", "");
 
-        // Step 6: Mantieni solo caratteri alfanumerici e simboli di base
-        input = input.replaceAll("[^a-zA-Z0-9 .,!?@#%&()\\[\\]{}:;\"'-_+|/\\\\]", ""); // Blocca caratteri non sicuri
+        // Step 6: Keep only alphanumeric characters and basic symbols.
+        input = input.replaceAll("[^a-zA-Z0-9 .,!?@#%&()\\[\\]{}:;\"'-_+|/\\\\]", "");
 
-        // Step 7: Limita la lunghezza massima dell'input
-        if (input.length() > 1024) { // Adatta il limite in base alla lunghezza accettabile degli argomenti
+        // Step 7: Limits the maximum length of the input.
+        if (input.length() > 1024) {
             input = input.substring(0, 1024);
         }
 
-        // Step 8: Rimuovi spazi multipli e trim
+        // Step 8: Remove multiple spaces and trim.
         return input.replaceAll("\\s+", " ").strip();
     }
 
+    /**
+     * It applies sanitization to the responses provided by the API.
+     *
+     * @param input the input
+     * @return string
+     */
     public static String sanitizeApiResponse(String input) {
         if (input == null) {
             return "";
         }
 
-        // Limita la lunghezza dell'input
+        // Limits the length of the input.
         if (input.length() > 4096) {
             throw new IllegalArgumentException("API response too large.");
         }
 
-        // Se il formato è JSON, valida e pulisci
+        // If the format is JSON, validate and clean up.
         if (input.trim().startsWith("{") && input.trim().endsWith("}")) {
             return sanitizeJson(input);
         }
 
-        // Se il formato è XML o HTML, usa una libreria per parsare e pulire
+        // If the format is XML or HTML, use a library to parse and clean.
         if (input.trim().startsWith("<") && input.trim().endsWith(">")) {
             return sanitizeHtmlOrXml(input);
         }
 
-        // Default: applica sanitizzazione generica per stringhe non strutturate
+        // Default: Applies generic sanitization for unstructured strings.
         return sanitizeString(input);
     }
 
+    /**
+     * Applies sanitization to input with Json syntax.
+     *
+     * @param json the json
+     * @return string
+     */
     private static String sanitizeJson(String json) {
-        // Usa una libreria come Jackson per validare il JSON
         try {
             ObjectMapper objectMapper = new ObjectMapper();
             JsonNode rootNode = objectMapper.readTree(json);
 
-            // Manipola i nodi per sanitizzare i valori
             sanitizeJsonNode(rootNode);
 
             return objectMapper.writeValueAsString(rootNode);
@@ -182,17 +220,20 @@ public class InputSanitizer {
         }
     }
 
-    // Metodo di supporto per sanitizzare i nodi JSON
+    /**
+     * Applies sanitization to Json format nodes.
+     *
+     * @param node the json node
+     * @return string
+     */
     private static void sanitizeJsonNode(JsonNode node) {
         if (node.isObject()) {
             ObjectNode objectNode = (ObjectNode) node;
             objectNode.fields().forEachRemaining(entry -> {
                 JsonNode childNode = entry.getValue();
                 if (childNode.isTextual()) {
-                    // Sanitizza valori stringa
                     objectNode.put(entry.getKey(), sanitizeString(childNode.asText()));
                 } else if (childNode.isContainerNode()) {
-                    // Ricorsivamente sanitizza nodi figli
                     sanitizeJsonNode(childNode);
                 }
             });
@@ -201,28 +242,27 @@ public class InputSanitizer {
             for (int i = 0; i < arrayNode.size(); i++) {
                 JsonNode childNode = arrayNode.get(i);
                 if (childNode.isTextual()) {
-                    // Sanitizza valori stringa negli array
                     arrayNode.set(i, new TextNode(sanitizeString(childNode.asText())));
                 } else if (childNode.isContainerNode()) {
-                    // Ricorsivamente sanitizza nodi figli
                     sanitizeJsonNode(childNode);
                 }
             }
         }
     }
 
+    /**
+     * Applies sanitization to input with HTML or XML format.
+     *
+     * @param input the input
+     * @return string
+     */
     private static String sanitizeHtmlOrXml(String input) {
-        // Usa Jsoup per analizzare e ripulire l'HTML o XML
         try {
-            // Analizza il contenuto come documento Jsoup
-            Document document = Jsoup.parse(input);
 
-            // Rimuove elementi pericolosi come script, iframe, embed, ecc.
+            Document document = Jsoup.parse(input);
             document.select("script, iframe, object, embed, link, meta").remove();
 
-            // Rimuove attributi potenzialmente dannosi (es. eventi JavaScript o stili)
             document.select("*").forEach(element -> {
-                // Rimuovi attributi pericolosi
                 element.removeAttr("onmouseover")
                         .removeAttr("onclick")
                         .removeAttr("onerror")
@@ -231,62 +271,79 @@ public class InputSanitizer {
                         .removeAttr("href");
             });
 
-            // Codifica entità HTML per prevenire XSS
             return Jsoup.clean(document.html(), "", Safelist.basic());
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid HTML or XML input.");
         }
     }
 
+    /**
+     * Applies sanitization to responses obtained from a call to a remote service.
+     *
+     * @param input the input
+     * @return string
+     */
     public static String sanitizeRemoteServiceCall(String input) {
         if (input == null) {
             return "";
         }
 
-        // Step 1: Rimuovi caratteri di controllo (byte non stampabili)
-        input = input.replaceAll("\\p{Cntrl}", ""); // Esclude caratteri come \0, \b, ecc.
+        // Step 1: Remove control characters (non-printable bytes).
+        input = input.replaceAll("\\p{Cntrl}", "");
 
-        // Step 2: Normalizza l'input per prevenire spoofing Unicode
+        // Step 2: Normalizes input to prevent Unicode spoofing.
         input = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFKC);
 
-        // Step 3: Rimuovi sequenze di escape dannose o non necessarie
-        input = input.replaceAll("([\\\\%$<>`|;{}\\[\\]])", ""); // Blocca simboli di escape e metacaratteri
+        // Step 3: Remove harmful or unnecessary escape sequences.
+        input = input.replaceAll("([\\\\%$<>`|;{}\\[\\]])", "");
 
-        // Step 4: Decodifica input codificati (ad esempio, URL o Base64) in modo sicuro
+        // Step 4: Decodes encoded input (e.g., URL or Base64) securely.
         try {
-            input = java.net.URLDecoder.decode(input, "UTF-8"); // Decodifica URL
+            input = java.net.URLDecoder.decode(input, "UTF-8");
         } catch (Exception e) {
-            // Ignora errori di decodifica, il che significa che l'input non era codificato
+            // It ignores decoding errors, which means that the input was not encoded.
         }
 
-        // Step 5: Valida e sanifica specifici formati come JSON o XML
+        // Step 5: Validates and sanitizes specific formats such as JSON or XML.
         if (isJson(input)) {
-            input = sanitizeJson(input); // Uso del metodo JSON specifico
+            input = sanitizeJson(input);
         } else if (isXml(input)) {
-            input = sanitizeHtmlOrXml(input); // Uso del metodo HTML/XML
+            input = sanitizeHtmlOrXml(input);
         }
 
-        // Step 6: Mantieni solo caratteri alfanumerici e simboli di base
-        input = input.replaceAll("[^a-zA-Z0-9 .,!?@#%&()\\[\\]{}:;\"'-_+|/\\\\]", ""); // Blocca caratteri non sicuri
+        // Step 6: Keep only alphanumeric characters and basic symbols.
+        input = input.replaceAll("[^a-zA-Z0-9 .,!?@#%&()\\[\\]{}:;\"'-_+|/\\\\]", "");
 
-        // Step 7: Limita la lunghezza dell'input per prevenire DoS
-        if (input.length() > 2048) { // Adatta la lunghezza massima al contesto
+        // Step 7: Limit the length of the input to prevent DoS.
+        if (input.length() > 2048) {
             input = input.substring(0, 2048);
         }
 
-        // Step 8: Rimuovi spazi multipli e trim
+        // Step 8: Remove multiple spaces and trim.
         return input.replaceAll("\\s+", " ").strip();
     }
 
+    /**
+     * Verifies that the input provided has the syntax of the Json format.
+     *
+     * @param input the input
+     * @return string
+     */
     private static boolean isJson(String input) {
         try {
-            new ObjectMapper().readTree(input); // Usa Jackson per validare JSON
+            new ObjectMapper().readTree(input);
             return true;
         } catch (Exception e) {
             return false;
         }
     }
 
+    /**
+     * Verifies that the input provided has the syntax of the XML format.
+     *
+     * @param input the input
+     * @return string
+     */
     private static boolean isXml(String input) {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -298,77 +355,94 @@ public class InputSanitizer {
         }
     }
 
+    /**
+     * Applies sanitization to input provided by an e-mail.
+     *
+     * @param input the input
+     * @return string
+     */
     public static String sanitizeEmailInput(String input) {
         if (input == null) {
             return "";
         }
 
-        // Step 1: Rimuovi caratteri di controllo (byte non stampabili)
-        input = input.replaceAll("\\p{Cntrl}", ""); // Esclude \0, \b, ecc.
+        // Step 1: Remove control characters (non-printable bytes).
+        input = input.replaceAll("\\p{Cntrl}", "");
 
-        // Step 2: Normalizza l'input per prevenire spoofing Unicode
+            // Step 2: Normalizes input to prevent Unicode spoofing.
         input = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFKC);
 
-        // Step 3: Rimuovi script HTML, tag e commenti
-        input = input.replaceAll("<!--.*?-->", ""); // Rimuove commenti HTML
-        input = input.replaceAll("<[^>]*>", "");   // Rimuove tag HTML
+        // Step 3: Remove HTML scripts, tags, and comments.
+        input = input.replaceAll("<!--.*?-->", "");
+        input = input.replaceAll("<[^>]*>", "");
 
-        // Step 4: Decodifica input codificati (ad esempio, URL)
+        // Step 4: Decoding encoded input (e.g., URLs).
         try {
-            input = java.net.URLDecoder.decode(input, "UTF-8"); // Decodifica URL
+            input = java.net.URLDecoder.decode(input, "UTF-8");
         } catch (Exception e) {
-            // Ignora errori di decodifica
+            // Ignore decoding errors.
         }
 
-        // Step 5: Rimuovi indirizzi email o link malevoli
-        input = input.replaceAll("(?i)mailto:|javascript:|data:|file:", ""); // Blocca protocolli pericolosi
-        input = input.replaceAll("(https?|ftp)://[^\\s]+", "");              // Blocca URL
+        // Step 5: Remove malicious email addresses or links.
+        input = input.replaceAll("(?i)mailto:|javascript:|data:|file:", "");
+        input = input.replaceAll("(https?|ftp)://[^\\s]+", "");
 
-        // Step 6: Mantieni solo caratteri alfanumerici e simboli accettabili
-        input = input.replaceAll("[^a-zA-Z0-9@._%+\\-\\s]", ""); // Blocca caratteri non sicuri
+        // Step 6: Keep only acceptable alphanumeric characters and symbols.
+        input = input.replaceAll("[^a-zA-Z0-9@._%+\\-\\s]", "");
 
-        // Step 7: Valida la lunghezza dell'input
-        if (input.length() > 512) { // Adatta il limite in base alle esigenze
+        // Step 7: Validates the length of the input.
+        if (input.length() > 512) {
             input = input.substring(0, 512);
         }
 
-        // Step 8: Rimuovi spazi multipli e trim
+        // Step 8: Remove multiple spaces and trim.
         return input.replaceAll("\\s+", " ").strip();
     }
 
-    // Esempio di metodo generico per sanitizzazione delle stringhe
+    /**
+     * Applies generic sanitization to strings.
+     *
+     * @param input the input
+     * @return string
+     */
     private static String sanitizeString(String input) {
         if (input == null) {
             return "";
         }
-        // Rimuove caratteri potenzialmente pericolosi
+        // Removes potentially dangerous characters.
         return input.replaceAll("[<>\\\"\\']", "").strip();
     }
 
+    /**
+     * Applies sanitization to data contained in files uploaded to the system.
+     *
+     * @param input the input
+     * @return string
+     */
     public static String sanitizeUploadFile(String input) {
         if (input == null || input.isEmpty()) {
             throw new IllegalArgumentException("Invalid file name.");
         }
 
-        // Step 1: Rimuovi caratteri di controllo (byte non stampabili)
-        input = input.replaceAll("\\p{Cntrl}", ""); // Rimuove caratteri non visibili (\0, \b, ecc.)
+        // Step 1: Remove control characters (non-printable bytes).
+        input = input.replaceAll("\\p{Cntrl}", "");
 
-        // Step 2: Normalizza l'input per prevenire spoofing Unicode
+        // Step 2: Normalizes input to prevent Unicode spoofing.
         input = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFKC);
 
-        // Step 3: Rimuovi percorsi relativi e caratteri non sicuri
-        input = input.replaceAll("\\.\\./", "")     // Rimuove path traversal (../)
-                .replaceAll("\\\\", "/");      // Uniforma separatori di directory
+        // Step 3: Remove relative paths and unsafe characters.
+        input = input.replaceAll("\\.\\./", "")
+                .replaceAll("\\\\", "/");
 
-        // Step 4: Mantieni solo caratteri validi per nomi di file
-        input = input.replaceAll("[^a-zA-Z0-9._-]", ""); // Blocca simboli non sicuri
+        // Step 4: Keep only valid characters for file names.
+        input = input.replaceAll("[^a-zA-Z0-9._-]", "");
 
-        // Step 5: Limita la lunghezza del nome del file
-        if (input.length() > 255) { // Limite standard per i nomi di file su molti file system
+        // Step 5: Limits the length of the file name.
+        if (input.length() > 255) {
             input = input.substring(0, 255);
         }
 
-        // Step 6: Rimuovi nomi di file riservati (esempio: Windows)
+        // Step 6: Remove reserved file names (example: Windows).
         String[] reservedNames = {
                 "CON", "PRN", "AUX", "NUL",
                 "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
@@ -380,7 +454,7 @@ public class InputSanitizer {
             }
         }
 
-        // Step 7: Rimuovi spazi inutili e ritorna il risultato
+        // Step 7: Remove unnecessary spaces and return the result.
         return input.strip();
     }
 

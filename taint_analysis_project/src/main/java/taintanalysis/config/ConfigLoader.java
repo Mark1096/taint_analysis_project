@@ -11,13 +11,18 @@ import java.io.FileReader;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
+import static taintanalysis.error.ErrorCode.generateRuntimeException;
 import static taintanalysis.utils.FileUtils.CONFIG_FILE_PATH;
 
+/**
+ * <h1> ConfigLoader </h1>
+ *
+ * This class is used to load information from the configuration file and return it based on checks that are made.
+ */
 public class ConfigLoader {
     private final Map<String, Source> sources = new HashMap<>();
-    public static ConfigLoader configLoader = new ConfigLoader();;
+    public static ConfigLoader configLoader = new ConfigLoader();
 
     private ConfigLoader() {
         Gson gson = new Gson();
@@ -29,10 +34,21 @@ public class ConfigLoader {
         }
     }
 
+    /**
+     * Returns the only instance of the class.
+     *
+     * @return config loader
+     */
     public static ConfigLoader getInstance() {
         return configLoader;
     }
 
+    /**
+     * It fills the list of sources with those found in the configuration file,
+     * creating a hash map that associates each source with its classes.
+     *
+     * @param config the config
+     */
     private void insertSources(Config config) {
         if (config != null && CollectionUtils.isNotEmpty(config.sources)) {
             for (Source source : config.sources) {
@@ -43,41 +59,74 @@ public class ConfigLoader {
         }
     }
 
-    public boolean isSourceTrusted(String sourceName) {
-        return sources.values().stream()
-                .filter(source -> source.getName().equals(sourceName))
-                .map(Source::isTrusted)
-                .findFirst()
-                .orElse(true);
-    }
-
-    // Metodo per ottenere i nomi delle sorgenti con trusted=false
+    /**
+     * Method to obtain untrusted source names from configuration file.
+     *
+     * @return list string
+     */
     public List<String> getUntrustedSources() {
         JsonNode rootNode = FileUtils.getConfigInformation();
 
-        // Estrai le sorgenti non fidate
         return rootNode.path("sources").findValuesAsText("name").stream()
                 .filter(source -> !rootNode.path("sources").findValue("trusted").asBoolean())
                 .toList();
     }
 
+    /**
+     * Returns an instance of the source of the configuration file,
+     * whose information matches that of the external source found in the user file.
+     *
+     * @param className the class name
+     * @param currentMethod the current method
+     * @param parameterContext the parameter context
+     * @param staticMethod the static method
+     * @return source
+     */
     public Source getSourceDetailsForResolvedType(String className, String currentMethod,
                                                   List<String> parameterContext, boolean staticMethod) {
         return sources.values().stream()
                 .flatMap(source -> source.getClasses().stream()
-                        .filter(configClass -> configClass.getClassName().equals(className))
-                        .filter(configClass -> configClass.getMethods().contains(currentMethod))
-                        .flatMap(configClass -> {
-                            if (staticMethod || configClass.getConstructors().isEmpty()) {
-                                return Stream.empty();  // Probabilmente si potrebbe restituire direttamente null, piuttosto che un oggetto. Da valutare!
-                            }
-                            return configClass.getConstructors().stream()
-                                    .anyMatch(constructor -> ConstructorAnalyzer.getInstance().matchesConstructor(constructor, parameterContext))
-                                    ? Stream.of(source)
-                                    : Stream.empty();
-                        }))
+                        .filter(configClass -> matchesClassAndMethod(configClass, className, currentMethod))
+                        .filter(configClass -> !staticMethod) // escludi subito i metodi statici
+                        .filter(configClass -> hasNoConstructors(configClass) || hasMatchingConstructor(configClass, parameterContext))
+                        .map(configClass -> source))
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Verify that the class and method are the same.
+     *
+     * @param configClass the config class
+     * @param className the class name
+     * @param currentMethod the current method
+     * @return boolean
+     */
+    private boolean matchesClassAndMethod(ConfigClass configClass, String className, String currentMethod) {
+        return configClass.getClassName().equals(className) &&
+                configClass.getMethods().contains(currentMethod);
+    }
+
+    /**
+     * Verify that the constructor does not receive parameters.
+     *
+     * @param configClass the config class
+     * @return boolean
+     */
+    private boolean hasNoConstructors(ConfigClass configClass) {
+        return configClass.getConstructors().isEmpty();
+    }
+
+    /**
+     * Compare constructor's parameters.
+     *
+     * @param configClass the config class
+     * @param parameterContext the parameter context
+     * @return boolean
+     */
+    private boolean hasMatchingConstructor(ConfigClass configClass, List<String> parameterContext) {
+        return configClass.getConstructors().stream()
+                .anyMatch(constructor -> ConstructorAnalyzer.getInstance().matchesConstructor(constructor, parameterContext));
     }
 
 }

@@ -3,81 +3,116 @@ package taintanalysis.service;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
-import com.github.javaparser.resolution.types.ResolvedType;
 import taintanalysis.config.ConstructorInfo;
 
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * <h1> ConstructorAnalyzer </h1>
+ *
+ * This class checks the parameters passed to the constructor of the instance invoking the method to be analyzed.
+ */
 public class ConstructorAnalyzer {
 
     private final static ConstructorAnalyzer obj = new ConstructorAnalyzer();
 
-    private ConstructorAnalyzer() {}
+    private ConstructorAnalyzer() {
+    }
 
+    /**
+     * Returns the only instance of the class.
+     *
+     * @return constructor analyzer
+     */
     public static ConstructorAnalyzer getInstance() {
         return obj;
     }
 
+    /**
+     * Find the variable declaration in the context of the CompilationUnit.
+     *
+     * @param nameExpr the name expr
+     * @param cu the cu
+     * @return optional string
+     */
     private Optional<String> resolveVariableType(NameExpr nameExpr, CompilationUnit cu) {
-        // Trova la dichiarazione della variabile nel contesto della CompilationUnit
         return cu.findAll(VariableDeclarator.class).stream()
                 .filter(declarator -> declarator.getNameAsString().equals(nameExpr.getNameAsString()))
                 .map(declarator -> declarator.getType().asString())
                 .findFirst();
     }
 
-    private void argAsNameExpr(NameExpr arg, CompilationUnit cu, List<String> parameterTypes) {
-        System.out.println("Argomento è una variabile: " + arg.getName());
-
-        Optional<String> result = resolveVariableType(arg, cu);
-        result.ifPresentOrElse(
-                type -> System.out.println("Tipo risolto: " + type),
-                () -> System.out.println("Impossibile risolvere il tipo per: " + arg.getName())
-        );
-
+    /**
+     * Adds the type extrapolated from the class argument NameExpr to the parameterTypes list.
+     *
+     * @param arg the arg
+     * @param parameterTypes the parameter types
+     */
+    private void argAsNameExpr(NameExpr arg, List<String> parameterTypes) {
         parameterTypes.add(arg.calculateResolvedType().describe());
     }
 
+    /**
+     * Adds the type extrapolated from the class argument LiteralExpr to the parameterTypes list.
+     *
+     * @param arg the arg
+     * @param parameterTypes the parameter types
+     */
     private void argAsLiteralExpr(LiteralExpr arg, List<String> parameterTypes) {
-        System.out.println("Argomento è un valore letterale: " + arg);
         parameterTypes.add(arg.calculateResolvedType().describe());
     }
 
-    private void argAsObjectCreationExpr(ObjectCreationExpr arg, List<String> parameterTypes,
-                                                CompilationUnit cu, VariableResolverVisitor variableResolver) {
-        System.out.println("Trovato un altro ObjectCreationExpr, di tipo: " + arg.getType());
-        analyzeConstructorDetails(arg, parameterTypes, cu, variableResolver);
+    /**
+     * Adds the type extrapolated from the class argument ObjectCreationExpr to the parameterTypes list.
+     *
+     * @param arg the arg
+     * @param parameterTypes the parameter types
+     * @param cu the cu
+     */
+    private void argAsObjectCreationExpr(ObjectCreationExpr arg, List<String> parameterTypes, CompilationUnit cu) {
+        analyzeConstructorDetails(arg, parameterTypes, cu);
         parameterTypes.add(arg.getType().resolve().describe());
     }
 
+    /**
+     * Adds the type extrapolated from the class argument MethodCallExpr to the parameterTypes list.
+     *
+     * @param arg the arg
+     * @param cu the cu
+     * @param parameterTypes the parameter types
+     */
     private void argAsMethodCallExpr(MethodCallExpr arg, CompilationUnit cu, List<String> parameterTypes) {
-        System.out.println("Method: " + arg);
-        System.out.println("Method returned type: " + arg.resolve().getReturnType().describe());
         arg.getScope().ifPresentOrElse(
                 scope -> {
-                    if (scope.isNameExpr()) {  // Controlla se è un NameExpr prima del cast
+                    if (scope.isNameExpr()) {
                         NameExpr instance = scope.asNameExpr();
                         Optional<String> result = resolveVariableType(instance, cu);
                         result.ifPresentOrElse(
                                 obj -> {
-                                    System.out.println("Tipo risolto: " + obj);
                                     String objAndMethod = obj + ".".concat(arg.getNameAsString()) + "()";
                                     parameterTypes.add(objAndMethod);
                                     parameterTypes.add(arg.resolve().getReturnType().describe());
                                 },
                                 () -> {
-                                    System.out.println("Impossibile risolvere il tipo per: " + instance.getName());
+                                    System.out.println("Unable to solve type for: " + instance.getName());
                                     parameterTypes.add(null);
                                 }
                         );
                     } else {
-                        System.out.println("Scope non è un NameExpr: " + scope);
+                        System.out.println("Scope is not a NameExpr: " + scope);
                     }
                 },
-                () -> System.out.println("Method call has no scope") // Caso in cui non c'è un scope
+                () -> System.out.println("Method call has no scope")
         );
     }
+
+    /**
+     * Adds the type extrapolated from the class argument FieldAccessExpr to the parameterTypes list.
+     *
+     * @param arg the arg
+     * @param parameterTypes the parameter types
+     */
     private void argAsFieldAccessExpr(FieldAccessExpr arg, List<String> parameterTypes) {
         FieldAccessExpr fieldAccessExpr = arg.asFieldAccessExpr();
         NameExpr className = fieldAccessExpr.getScope().asNameExpr();
@@ -87,36 +122,39 @@ public class ConstructorAnalyzer {
         parameterTypes.add(fieldAccessExpr.resolve().getType().describe());
     }
 
-    public void analyzeConstructorDetails(ObjectCreationExpr creationExpr, List<String> parameterTypes,
-                                           CompilationUnit cu, VariableResolverVisitor variableResolver) {
-
-        String currentType = creationExpr.getType().resolve().describe();
-
-        System.out.println("Analizzando costruttore: " + currentType);
-        System.out.println("Parametri: " + creationExpr.getArguments());
-
-        for (Expression arg: creationExpr.getArguments()) {
-
-            ResolvedType argType = arg.calculateResolvedType();
-            System.out.println("argType: " + argType);
-            System.out.println("argType describe: " + argType.describe());
-
+    /**
+     * It analyses the arguments passed to the constructor and inserts their type into the parameterTypes list.
+     *
+     * @param creationExpr the creation expr
+     * @param parameterTypes the parameter types
+     * @param cu the cu
+     */
+    public void analyzeConstructorDetails(ObjectCreationExpr creationExpr, List<String> parameterTypes, CompilationUnit cu) {
+        for (Expression arg : creationExpr.getArguments()) {
             if (arg instanceof NameExpr) {
-                argAsNameExpr(arg.asNameExpr(), cu, parameterTypes);
+                argAsNameExpr(arg.asNameExpr(), parameterTypes);
             } else if (arg instanceof LiteralExpr) {
                 argAsLiteralExpr(arg.asLiteralExpr(), parameterTypes);
             } else if (arg instanceof ObjectCreationExpr) {
-                argAsObjectCreationExpr(arg.asObjectCreationExpr(), parameterTypes, cu, variableResolver);
+                argAsObjectCreationExpr(arg.asObjectCreationExpr(), parameterTypes, cu);
             } else if (arg instanceof MethodCallExpr) {
                 argAsMethodCallExpr(arg.asMethodCallExpr(), cu, parameterTypes);
             } else if (arg instanceof FieldAccessExpr) {
                 argAsFieldAccessExpr(arg.asFieldAccessExpr(), parameterTypes);
             } else {
-                System.out.println("Argomento di tipo sconosciuto: " + arg.getClass().getSimpleName());
+                System.out.println("Argument of unknown type:" + arg.getClass().getSimpleName());
             }
         }
     }
 
+    /**
+     * It performs checks on the size and types of parameters passed,
+     * to both the external source constructor in the user code and the constructor in the configuration file.
+     *
+     * @param constructor the constructor
+     * @param constructorArgs the constructor args
+     * @return boolean
+     */
     public boolean matchesConstructor(ConstructorInfo constructor, List<String> constructorArgs) {
         return constructor.getParameterTypes().size() == constructorArgs.size() &&
                 constructor.getParameterTypes().equals(constructorArgs);
