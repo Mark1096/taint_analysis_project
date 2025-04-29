@@ -1,0 +1,325 @@
+{
+  "sources": [
+    {
+      "name": "userInput",
+      "trusted": false,
+      "classes": [
+        {
+          "className": "java.util.Scanner",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.InputStream", "System.in"],
+              "parameters": ["System.in"]
+            }
+          ],
+          "methods": [
+            "nextLine()", "next()", "nextInt()", "nextDouble()", "nextBoolean()",
+            "nextByte()", "nextShort()", "nextLong()", "nextFloat()"
+          ]
+        },
+        {
+          "className": "java.io.BufferedReader",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.InputStreamReader", "java.io.InputStream", "System.in"],
+              "parameters": ["System.in"]
+            }
+          ],
+          "methods": [
+            "readLine()", "read()", "skip()"
+          ]
+        },
+        {
+          "className": "java.io.InputStreamReader",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.InputStream", "System.in"],
+              "parameters": ["System.in"]
+            }
+          ],
+          "methods": [
+            "read()", "ready()"
+          ]
+        },
+        {
+          "className": "java.io.Console",
+          "constructors": [],
+          "methods": [
+            "readLine()", "readPassword()"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "streamInput",
+      "trusted": false,
+      "classes": [
+        {
+          "className": "java.io.InputStream",
+          "constructors": [],
+          "methods": [
+            "read()", "available()"
+          ]
+        },
+        {
+          "className": "java.io.BufferedReader",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.InputStreamReader", "java.util.stream"],
+              "parameters": ["Stream input"]
+            }
+          ],
+          "methods": [
+            "readLine()", "read()", "skip()"
+          ]
+        },
+        {
+          "className": "java.io.FileInputStream",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.File"],
+              "parameters": ["input.txt"]
+            }
+          ],
+          "methods": [
+            "read()", "getChannel()"
+          ]
+        },
+        {
+          "className": "java.io.ObjectInputStream",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.InputStream", "java.util.stream"],
+              "parameters": ["Stream input"]
+            }
+          ],
+          "methods": [
+            "readObject()", "readInt()", "readDouble()", "readBoolean()"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commandLineArgs",
+      "trusted": false,
+      "classes": [
+        {
+          "className": "java.lang.System",
+          "constructors": [],
+          "methods": []
+        }
+      ]
+    },
+    {
+      "name": "apiResponse",
+      "trusted": false,
+      "classes": [
+        {
+          "className": "java.net.HttpURLConnection",
+          "constructors": [],
+          "methods": [
+            "getInputStream()", "getHeaderField()"
+          ]
+        },
+        {
+          "className": "java.net.URL",
+          "constructors": [
+            {
+              "parameterTypes": ["java.lang.String"],
+              "parameters": ["API URL"]
+            }
+          ],
+          "methods": [
+            "openStream()", "getContent()"
+          ]
+        },
+        {
+          "className": "java.io.InputStreamReader",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.InputStream", "HttpURLConnection.getInputStream()"],
+              "parameters": ["HttpURLConnection.getInputStream()"]
+            }
+          ],
+          "methods": [
+            "read()", "ready()"
+          ]
+        },
+        {
+          "className": "java.io.BufferedReader",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.InputStreamReader", "java.io.InputStream", "HttpURLConnection.getInputStream()"],
+              "parameters": ["HttpURLConnection.getInputStream()"]
+            }
+          ],
+          "methods": [
+            "readLine()", "read()", "skip()"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "databaseQuery",
+      "trusted": true,
+      "classes": [
+        {
+          "className": "java.sql.Connection",
+          "constructors": [],
+          "methods": []
+        },
+        {
+          "className": "java.sql.Statement",
+          "constructors": [],
+          "methods": [
+            "executeQuery()", "executeUpdate()", "execute()"
+          ]
+        },
+        {
+          "className": "java.sql.ResultSet",
+          "constructors": [],
+          "methods": [
+            "getString()", "getInt()", "getDouble()", "getBoolean()"
+          ]
+        },
+        {
+          "className": "java.sql.PreparedStatement",
+          "constructors": [],
+          "methods": [
+            "setString()", "setInt()", "setDouble()", "executeQuery()", "executeUpdate()"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "environmentVariables",
+      "trusted": true,
+      "classes": [
+        {
+          "className": "java.lang.System",
+          "constructors": [],
+          "methods": [
+            "getProperty()", "getenv()"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "remoteServiceCall",
+      "trusted": false,
+      "classes": [
+        {
+          "className": "java.net.Socket",
+          "constructors": [
+            {
+              "parameterTypes": ["java.lang.String", "int"],
+              "parameters": ["Remote host", "Port"]
+            }
+          ],
+          "methods": [
+            "getInputStream()"
+          ]
+        },
+        {
+          "className": "java.rmi.Remote",
+          "constructors": []
+        },
+        {
+          "className": "java.net.HttpURLConnection",
+          "constructors": [],
+          "methods": [
+            "getInputStream()", "getHeaderField()"
+          ]
+        },
+        {
+          "className": "java.io.InputStreamReader",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.InputStream", "java.net.Socket"],
+              "parameters": ["Socket input"]
+            }
+          ],
+          "methods": [
+            "read()", "ready()"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "emailInput",
+      "trusted": false,
+      "classes": [
+        {
+          "className": "javax.mail.Message",
+          "constructors": [],
+          "methods": [
+            "getSubject()", "getContent()", "getFrom()", "getRecipients()"
+          ]
+        },
+        {
+          "className": "javax.mail.Session",
+          "constructors": []
+        },
+        {
+          "className": "javax.mail.internet.MimeMessage",
+          "constructors": [],
+          "methods": [
+            "getSubject()", "getContent()", "getFrom()", "getRecipients()"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "uploadFile",
+      "trusted": false,
+      "classes": [
+        {
+          "className": "java.util.logging.Logger",
+          "constructors": [],
+          "methods": []
+        },
+        {
+          "className": "java.util.logging.FileHandler",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.File"],
+              "parameters": ["log.txt"]
+            }
+          ],
+          "methods": []
+        },
+        {
+          "className": "java.io.FileReader",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.File"],
+              "parameters": ["config.properties"]
+            }
+          ],
+          "methods": [
+            "read()"
+          ]
+        },
+        {
+          "className": "java.io.BufferedReader",
+          "constructors": [
+            {
+              "parameterTypes": ["java.io.FileReader", "java.io.File"],
+              "parameters": ["config.properties"]
+            }
+          ],
+          "methods": [
+            "readLine()", "read()", "skip()"
+          ]
+        },
+        {
+          "className": "java.util.Properties",
+          "constructors": [],
+          "methods": [
+            "load()", "getProperty()"
+          ]
+        }
+      ]
+    }
+  ]
+}
